@@ -1,0 +1,62 @@
+## .NET / MSBuild
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+## NuGet
+*.nupkg
+*.snupkg
+packages/
+!**/packages/repositories.config
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]uild/
+[Pp]ublish/
+
+## User-specific
+*.rsuser
+.localhistory/
+.idea/
+*.DS_Store
+
+## Rider
+.idea/
+
+## Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+## Logs & temp
+*.log
+*.tmp
+*.temp
+
+## MSIX / packaging artifacts
+AppPackages/
+BundleArtifacts/
+Package.StoreAssociation.xml
+_pkginfo.txt
+*.appx
+*.msix
+*.msixbundle
+*.appxbundle
+*.appxupload
+
+## Sensitive — never commit
+credentials.enc
+*.pfx
+*.p12
+appsettings.local.json

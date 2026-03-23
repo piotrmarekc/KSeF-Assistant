@@ -1,0 +1,95 @@
+<Page
+    x:Class="KSeFAssistant.UI.Views.AuthPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:KSeFAssistant.UI.ViewModels"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <ScrollViewer Padding="32">
+        <StackPanel MaxWidth="600" Spacing="16">
+
+            <TextBlock Text="Ustawienia połączenia z KSeF"
+                       Style="{StaticResource TitleTextBlockStyle}"
+                       Margin="0,0,0,8"/>
+
+            <!-- Środowisko -->
+            <TextBlock Text="Środowisko KSeF" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+            <ComboBox x:Name="EnvironmentCombo"
+                      ItemsSource="{x:Bind ViewModel.Environments}"
+                      SelectedItem="{x:Bind ViewModel.SelectedEnvironment, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch"/>
+
+            <!-- NIP -->
+            <TextBlock Text="NIP firmy (10 cyfr)" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+            <TextBox x:Name="NipBox"
+                     PlaceholderText="np. 1234567890"
+                     Text="{x:Bind ViewModel.Nip, Mode=TwoWay}"
+                     MaxLength="10"
+                     InputScope="Number"/>
+
+            <!-- Metoda autoryzacji -->
+            <TextBlock Text="Metoda autoryzacji" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+            <ComboBox x:Name="AuthMethodCombo"
+                      ItemsSource="{x:Bind ViewModel.AuthMethods}"
+                      SelectedItem="{x:Bind ViewModel.SelectedAuthMethod, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch"/>
+
+            <!-- Panel TOKEN -->
+            <StackPanel Visibility="{x:Bind ViewModel.IsTokenMode, Mode=OneWay,
+                        Converter={StaticResource BoolToVisibility}}" Spacing="8">
+                <InfoBar IsOpen="True" Severity="Informational" IsClosable="False"
+                         Message="Token API generujesz w module MCU (ksef.podatki.gov.pl). Ważny do 31.12.2026."/>
+                <TextBlock Text="Token API" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                <PasswordBox x:Name="TokenBox"
+                             PlaceholderText="Wklej token API"
+                             Password="{x:Bind ViewModel.ApiToken, Mode=TwoWay}"/>
+            </StackPanel>
+
+            <!-- Panel CERTYFIKAT -->
+            <StackPanel Visibility="{x:Bind ViewModel.IsTokenMode, Mode=OneWay,
+                        Converter={StaticResource BoolToVisibilityInverse}}" Spacing="8">
+                <InfoBar IsOpen="True" Severity="Informational" IsClosable="False"
+                         Message="Certyfikaty X.509 (.pfx) pobierasz z modułu MCU. Obowiązkowe od 01.01.2027."/>
+                <TextBlock Text="Plik certyfikatu (.pfx)" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="CertPathBox"
+                             Grid.Column="0"
+                             PlaceholderText="Ścieżka do pliku .pfx"
+                             Text="{x:Bind ViewModel.CertificatePath, Mode=TwoWay}"
+                             IsReadOnly="True"/>
+                    <Button Grid.Column="1" Content="Przeglądaj..."
+                            Click="BrowseCertificate_Click"/>
+                </Grid>
+                <TextBlock Text="Hasło certyfikatu" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                <PasswordBox x:Name="CertPasswordBox"
+                             PlaceholderText="Hasło do pliku .pfx"
+                             Password="{x:Bind ViewModel.CertificatePassword, Mode=TwoWay}"/>
+            </StackPanel>
+
+            <!-- Przyciski -->
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                <Button Content="Zapisz ustawienia"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Command="{x:Bind ViewModel.SaveSettingsCommand}"
+                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolInverse}}"/>
+                <Button Content="Testuj połączenie"
+                        Command="{x:Bind ViewModel.TestConnectionCommand}"
+                        IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolInverse}}"/>
+                <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
+                              Width="24" Height="24"/>
+            </StackPanel>
+
+            <!-- Status -->
+            <InfoBar x:Name="StatusBar"
+                     IsOpen="{x:Bind ViewModel.StatusMessage, Mode=OneWay, Converter={StaticResource StringToBool}}"
+                     Severity="{x:Bind ViewModel.IsStatusSuccess, Mode=OneWay, Converter={StaticResource BoolToSeverity}}"
+                     Message="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                     IsClosable="False"/>
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>

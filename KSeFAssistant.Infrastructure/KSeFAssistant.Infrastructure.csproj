@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>KSeFAssistant.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- HTTP client -->
+    <PackageReference Include="Refit" Version="7.2.22" />
+    <PackageReference Include="Refit.HttpClientFactory" Version="7.2.22" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+    <!-- Resilience / retry (Polly-based) -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.3.0" />
+    <!-- Logging -->
+    <PackageReference Include="Serilog" Version="4.2.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <!-- DPAPI credential storage -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+    <!-- XML parsing for FA_v3 -->
+    <PackageReference Include="System.Xml.XPath.XmlDocument" Version="4.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KSeFAssistant.Core\KSeFAssistant.Core.csproj" />
+  </ItemGroup>
+
+</Project>

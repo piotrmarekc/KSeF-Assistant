@@ -1,0 +1,26 @@
+<Application
+    x:Class="KSeFAssistant.UI.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="using:KSeFAssistant.UI.Converters">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Konwertery globalne -->
+            <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+            <converters:BoolToVisibilityInverseConverter x:Key="BoolToVisibilityInverse"/>
+            <converters:BoolInverseConverter x:Key="BoolInverse"/>
+            <converters:StringToBoolConverter x:Key="StringToBool"/>
+            <converters:StringToVisibilityConverter x:Key="StringToVisibility"/>
+            <converters:IntToVisibilityConverter x:Key="IntToVisibility"/>
+            <converters:IntToBoolConverter x:Key="IntToBool"/>
+            <converters:IntToBoolInverseConverter x:Key="IntToBoolInverse"/>
+            <converters:BoolToSeverityConverter x:Key="BoolToSeverity"/>
+            <converters:DecimalFormatterConverter x:Key="DecimalFormatter"/>
+            <converters:MonthIndexConverter x:Key="MonthIndexConverter"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
