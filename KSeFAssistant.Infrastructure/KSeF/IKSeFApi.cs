@@ -76,9 +76,10 @@ public interface IKSeFApi
         [AliasAs("pageSize")] int pageSize,
         CancellationToken ct = default);
 
-    /// GET /v2/invoices/ksef/{ksefNumber} — pobierz XML faktury
+    /// GET /v2/invoices/ksef/{ksefNumber} — pobierz XML faktury (raw string — nie przez JSON deserializer)
     [Get("/v2/invoices/ksef/{ksefNumber}")]
-    Task<ApiResponse<string>> DownloadInvoiceXmlAsync(
+    [Headers("Accept: application/xml, text/xml, */*")]
+    Task<string> DownloadInvoiceXmlAsync(
         [Header("Authorization")] string authorization,
         string ksefNumber,
         CancellationToken ct = default);

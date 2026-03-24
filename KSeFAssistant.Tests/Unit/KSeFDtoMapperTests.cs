@@ -91,6 +91,96 @@ public sealed class KSeFDtoMapperTests
         result.ParseError.Should().NotBeNullOrEmpty();
     }
 
+    [Fact]
+    public void EnrichFromXml_Ns2025_ParsesFaWiersz()
+    {
+        var baseInvoice = new InvoiceRecord { KSeFNumber = "9930416337-20260322-59A620000001-62" };
+        var xml = BuildRealKsefXml2025();
+
+        var result = _sut.EnrichFromXml(baseInvoice, xml);
+
+        result.ParseError.Should().BeNull();
+        result.LineItems.Should().HaveCount(1);
+        result.LineItems[0].Name.Should().Be("BENZYNA PB95");
+        result.LineItems[0].VatRate.Should().Be("23");
+        result.VatAmount23.Should().Be(51.71m);
+        result.PlaceOfIssue.Should().Be("Wieliczka");
+        result.IsPaid.Should().BeTrue();
+        result.AdditionalNotes.Should().HaveCount(2);
+    }
+
+    private static string BuildRealKsefXml2025() => """
+        <Faktura xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/">
+          <Naglowek>
+            <KodFormularza kodSystemowy="FA (3)" wersjaSchemy="1-0E">FA</KodFormularza>
+            <WariantFormularza>3</WariantFormularza>
+          </Naglowek>
+          <Podmiot1>
+            <DaneIdentyfikacyjne>
+              <NIP>9930416337</NIP>
+              <Nazwa>Krak-Tar Sp. z o.o.</Nazwa>
+            </DaneIdentyfikacyjne>
+            <Adres>
+              <KodKraju>PL</KodKraju>
+              <AdresL1>Przemyslowa 27, 33-100 Tarnow</AdresL1>
+            </Adres>
+          </Podmiot1>
+          <Podmiot2>
+            <DaneIdentyfikacyjne>
+              <NIP>6783169728</NIP>
+              <Nazwa>CODLAKE SPOLKA AKCYJNA</Nazwa>
+            </DaneIdentyfikacyjne>
+            <Adres>
+              <KodKraju>PL</KodKraju>
+              <AdresL1>UL. TESTOWA 14, 31-866 KRAKOW</AdresL1>
+            </Adres>
+          </Podmiot2>
+          <Fa>
+            <KodWaluty>PLN</KodWaluty>
+            <P_1>2026-03-22</P_1>
+            <P_1M>Wieliczka</P_1M>
+            <P_2>FV/9/2491/3/2026</P_2>
+            <P_6>2026-03-22</P_6>
+            <P_13_1>224.81</P_13_1>
+            <P_14_1>51.71</P_14_1>
+            <P_15>276.52</P_15>
+            <Adnotacje>
+              <P_16>2</P_16><P_17>2</P_17><P_18>2</P_18><P_18A>2</P_18A>
+            </Adnotacje>
+            <RodzajFaktury>VAT</RodzajFaktury>
+            <DodatkowyOpis>
+              <Klucz>Pojazd</Klucz>
+              <Wartosc>DX78384</Wartosc>
+            </DodatkowyOpis>
+            <DodatkowyOpis>
+              <Klucz>Wystawil</Klucz>
+              <Wartosc>Lukasz Porebski</Wartosc>
+            </DodatkowyOpis>
+            <FaWiersz>
+              <NrWierszaFa>1</NrWierszaFa>
+              <UU_ID>34795</UU_ID>
+              <P_7>BENZYNA PB95</P_7>
+              <Indeks>2</Indeks>
+              <GTIN>1111140000047</GTIN>
+              <CN>01012910</CN>
+              <P_8A>litr</P_8A>
+              <P_8B>39.56000</P_8B>
+              <P_9A>5.68</P_9A>
+              <P_9B>6.99</P_9B>
+              <P_11>224.81</P_11>
+              <P_11A>276.52</P_11A>
+              <P_11Vat>51.71</P_11Vat>
+              <P_12>23</P_12>
+            </FaWiersz>
+            <Platnosc>
+              <Zaplacono>1</Zaplacono>
+              <DataZaplaty>2026-03-22</DataZaplaty>
+              <FormaPlatnosci>2</FormaPlatnosci>
+            </Platnosc>
+          </Fa>
+        </Faktura>
+        """;
+
     private static string BuildSampleFaV3Xml() => """
         <?xml version="1.0" encoding="UTF-8"?>
         <Faktura xmlns="http://crd.gov.pl/wzor/2023/06/29/12648/">

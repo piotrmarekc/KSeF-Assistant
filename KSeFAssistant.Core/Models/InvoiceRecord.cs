@@ -25,6 +25,7 @@ public sealed record InvoiceRecord
     public string SellerStreet { get; init; } = string.Empty;
     public string SellerCity { get; init; } = string.Empty;
     public string SellerPostCode { get; init; } = string.Empty;
+    public string SellerCountry { get; init; } = string.Empty; // KodKraju → nazwa (np. Polska)
 
     // --- Nabywca ---
     public string BuyerNip { get; init; } = string.Empty;     // NIP lub inny identyfikator
@@ -32,6 +33,7 @@ public sealed record InvoiceRecord
     public string BuyerStreet { get; init; } = string.Empty;
     public string BuyerCity { get; init; } = string.Empty;
     public string BuyerPostCode { get; init; } = string.Empty;
+    public string BuyerCountry { get; init; } = string.Empty;  // KodKraju → nazwa
 
     // --- Wartości ---
     public decimal TotalNetValue { get; init; }
@@ -47,6 +49,8 @@ public sealed record InvoiceRecord
     public string Currency { get; init; } = "PLN";
     public string PaymentMethod { get; init; } = string.Empty;         // FormaPlatnosci (1=gotówka, 6=przelew…)
     public DateOnly? PaymentDueDate { get; init; }                      // pierwszy termin płatności
+    public bool IsPaid { get; init; }                                   // Zaplacono=1
+    public DateOnly? PaymentDate { get; init; }                         // DataZaplaty
     public IReadOnlyList<string> BankAccountNumbers { get; init; } = []; // rachunki bankowe sprzedawcy
 
     // --- Adnotacje (flagi z sekcji Adnotacje FA_v3) ---

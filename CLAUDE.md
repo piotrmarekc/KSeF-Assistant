@@ -16,17 +16,15 @@ dotnet test KSeFAssistant.Tests --filter "FullyQualifiedName~InvoiceFilterServic
 
 **Building the full solution (including UI) requires MSBuild from Visual Studio:**
 
-```powershell
-# From PowerShell — dotnet CLI fails due to XamlCompiler issue (see below)
-& "C:\Program Files\Microsoft Visual Studio\18\Professional\MSBuild\Current\Bin\amd64\MSBuild.exe" `
-    "KSeFAssistant.sln" /p:Configuration=Debug /p:Platform=x64 /v:m
+```bash
+# From Claude's bash shell (PowerShell & operator doesn't work in bash)
+powershell.exe -Command "& 'C:\Program Files\Microsoft Visual Studio\18\Professional\MSBuild\Current\Bin\amd64\MSBuild.exe' 'KSeFAssistant.sln' /p:Configuration=Debug /p:Platform=x64 /v:m"
 ```
 
 **Running the app after build:**
 
-```powershell
-# Launch the compiled exe directly (dotnet run fails on WinUI 3)
-Start-Process "KSeFAssistant.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\KSeFAssistant.UI.exe"
+```bash
+powershell.exe -Command "Start-Process 'KSeFAssistant.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\KSeFAssistant.UI.exe'"
 ```
 
 Alternatively open `KSeFAssistant.sln` in **Visual Studio 2022** and press `F5`.
@@ -72,6 +70,13 @@ Dependency flow: `UI → Core ← Infrastructure`, `Tests → Core + Infrastruct
 - `POST /v2/invoices/query/metadata` with `subjectType: "Subject2"` (buyer) + date range → paginated `{hasMore, invoices: [...]}`
 - `GET /v2/invoices/ksef/{ksefNumber}` → FA_v3 XML string, parsed by `KSeFDtoMapper.EnrichFromXml`
 - `GetPurchaseInvoicesAsync` returns `IAsyncEnumerable<InvoiceRecord>` with header data only. The ViewModel adds them to `ObservableCollection` as they arrive. Full XML (`LoadInvoiceXmlAsync`) is fetched separately when needed for export.
+- `IKSeFApi.DownloadInvoiceXmlAsync` returns `Task<string>` (NOT `Task<ApiResponse<string>>`). Refit's JSON deserializer returns null `Content` for XML responses, so `UnwrapAsync` would throw. The raw string return reads the body directly.
+
+**FA_v3 XML parsing (`KSeFDtoMapper`):**
+- Two namespace variants exist: `http://crd.gov.pl/wzor/2023/06/29/12648/` and `http://crd.gov.pl/wzor/2025/06/25/13775/`. `FindFaNamespace()` auto-detects from root element.
+- All scalar XPath queries use `fa:` prefix with `local-name()` fallback (in the inner `Get()` closure). Multi-element `SelectNodes` calls similarly fall back to `//*[local-name()='ElementName']` when the namespace-qualified query returns nothing.
+- Real KSeF XML `<Adres>` has only `AdresL1` (full address in one field); `Miejscowosc`/`KodPocztowy` are absent in many invoices. `SellerName`/`BuyerName` may contain `\n` (e.g. `"Firma Sp. z o.o.\nBDO000054251"`).
+- `PdfExportService` uses QuestPDF for rendering. `BuildPartyBox` takes `(col, title, nip, name, street, postCode, city, country)` and splits `name` on `\n` for multi-line display.
 
 **Credential storage:** `WindowsCredentialManager` uses `ProtectedData.Protect()` (DPAPI, `CurrentUser` scope), stores encrypted bytes to `%LOCALAPPDATA%\KSeFAssistant\credentials.enc`. `SessionContext.AccessToken` lives in memory only — never persisted.
 

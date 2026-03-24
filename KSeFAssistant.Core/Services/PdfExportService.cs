@@ -38,7 +38,7 @@ public sealed class PdfExportService : IPdfExportService
         return $"{invoice.SellerNip}_{invoice.IssueDate:yyyy-MM-dd}_{safe}.pdf";
     }
 
-    // ──────────────────────────────────────────────── DOCUMENT ──
+    // ─────────────────────────────────────────────────── DOCUMENT ──
 
     private static void BuildDocument(IDocumentContainer container, InvoiceRecord inv)
     {
@@ -48,261 +48,412 @@ public sealed class PdfExportService : IPdfExportService
             page.Margin(1.5f, Unit.Centimetre);
             page.DefaultTextStyle(x => x.FontSize(9).FontFamily("Arial"));
             page.Header().Element(c => BuildHeader(c, inv));
-            page.Content().Element(c => BuildContent(c, inv));
+            page.Content().PaddingTop(8).Element(c => BuildContent(c, inv));
             page.Footer().Element(c => BuildFooter(c, inv));
         });
     }
 
-    // ──────────────────────────────────────────────── HEADER ──
+    // ─────────────────────────────────────────────────── HEADER ──
 
     private static void BuildHeader(IContainer container, InvoiceRecord inv)
     {
-        var title = InvoiceTypeTitle(inv.InvoiceType);
         container.Column(col =>
         {
+            // Górny pasek — KSeF branding + nr faktury
             col.Item().Row(row =>
             {
                 row.RelativeItem().Column(c =>
                 {
-                    c.Item().Text(title).FontSize(18).Bold().FontColor(Colors.Blue.Darken3);
-                    c.Item().Text($"Nr: {inv.InvoiceNumber}").FontSize(11).Bold();
-                    if (!string.IsNullOrEmpty(inv.PlaceOfIssue))
-                        c.Item().Text($"Miejsce wystawienia: {inv.PlaceOfIssue}").FontSize(8);
+                    c.Item().Text("Krajowy System e-Faktur")
+                        .FontSize(16).Bold().FontColor(Colors.Red.Medium);
                 });
-                row.ConstantItem(200).Column(c =>
+                row.ConstantItem(240).Column(c =>
                 {
-                    c.Item().Text($"Data wystawienia: {inv.IssueDate:dd.MM.yyyy}");
-                    if (inv.SaleDate.HasValue)
-                        c.Item().Text($"Data sprzedaży: {inv.SaleDate:dd.MM.yyyy}");
-                    c.Item().Text($"Nr KSeF: {inv.KSeFNumber}").FontSize(7).FontColor(Colors.Grey.Darken1);
-                    if (!string.IsNullOrEmpty(inv.InvoiceType))
-                        c.Item().Text($"Typ: {InvoiceTypeLabel(inv.InvoiceType)}").FontSize(7).FontColor(Colors.Grey.Darken1);
+                    c.Item().AlignRight().Text("Numer Faktury:").FontSize(8).FontColor(Colors.Grey.Darken1);
+                    c.Item().AlignRight().Text(inv.InvoiceNumber).FontSize(15).Bold();
+                    c.Item().AlignRight().Text(InvoiceTypeLabel(inv.InvoiceType)).FontSize(8);
+                    c.Item().AlignRight()
+                        .Text($"Numer KSEF:{inv.KSeFNumber}").FontSize(7).FontColor(Colors.Grey.Darken1);
                 });
             });
-
-            // Flagi adnotacji
-            var flags = new List<string>();
-            if (inv.IsSplitPayment)  flags.Add("Mechanizm podzielonej płatności");
-            if (inv.IsReverseCharge) flags.Add("Odwrotne obciążenie");
-            if (inv.IsCashAccounting) flags.Add("Metoda kasowa");
-            if (inv.IsSelfInvoicing) flags.Add("Samofakturowanie");
-            if (flags.Count > 0)
-                col.Item().Background(Colors.Orange.Lighten4).Padding(4)
-                   .Text(string.Join("  |  ", flags)).FontSize(8).Bold();
-
-            col.Item().LineHorizontal(1).LineColor(Colors.Blue.Darken3);
+            col.Item().LineHorizontal(1).LineColor(Colors.Grey.Lighten1);
         });
     }
 
-    // ──────────────────────────────────────────────── CONTENT ──
+    // ─────────────────────────────────────────────────── CONTENT ──
 
     private static void BuildContent(IContainer container, InvoiceRecord inv)
     {
         container.Column(col =>
         {
-            col.Spacing(8);
+            col.Spacing(10);
 
-            // Strony: sprzedawca / nabywca
+            // 1. Sprzedawca / Nabywca
             col.Item().Row(row =>
             {
-                row.RelativeItem().Border(1).BorderColor(Colors.Grey.Lighten2).Padding(8).Column(c =>
-                {
-                    c.Item().Text("SPRZEDAWCA").Bold().FontSize(8).FontColor(Colors.Grey.Darken2);
-                    c.Item().Text(inv.SellerName).Bold();
-                    c.Item().Text($"NIP: {FormatNip(inv.SellerNip)}");
-                    if (!string.IsNullOrEmpty(inv.SellerStreet))
-                        c.Item().Text(inv.SellerStreet);
-                    if (!string.IsNullOrEmpty(inv.SellerCity))
-                        c.Item().Text($"{inv.SellerPostCode} {inv.SellerCity}");
-                });
+                row.RelativeItem().Column(c => BuildPartyBox(c, "Sprzedawca",
+                    inv.SellerNip, inv.SellerName, inv.SellerStreet, inv.SellerPostCode, inv.SellerCity, inv.SellerCountry));
                 row.ConstantItem(10);
-                row.RelativeItem().Border(1).BorderColor(Colors.Grey.Lighten2).Padding(8).Column(c =>
-                {
-                    c.Item().Text("NABYWCA").Bold().FontSize(8).FontColor(Colors.Grey.Darken2);
-                    c.Item().Text(inv.BuyerName).Bold();
-                    c.Item().Text($"NIP: {FormatNip(inv.BuyerNip)}");
-                    if (!string.IsNullOrEmpty(inv.BuyerStreet))
-                        c.Item().Text(inv.BuyerStreet);
-                    if (!string.IsNullOrEmpty(inv.BuyerCity))
-                        c.Item().Text($"{inv.BuyerPostCode} {inv.BuyerCity}");
-                });
+                row.RelativeItem().Column(c => BuildPartyBox(c, "Nabywca",
+                    inv.BuyerNip, inv.BuyerName, inv.BuyerStreet, inv.BuyerPostCode, inv.BuyerCity, inv.BuyerCountry));
             });
 
-            // Tabela pozycji
-            if (inv.LineItems.Count > 0)
+            // 2. Szczegóły
+            col.Item().Border(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(8).Column(c =>
             {
-                bool hasGtu      = inv.LineItems.Any(i => !string.IsNullOrEmpty(i.GtuCode));
-                bool hasDiscount = inv.LineItems.Any(i => i.DiscountAmount != 0);
-
-                col.Item().Table(table =>
-                {
-                    table.ColumnsDefinition(cols =>
-                    {
-                        cols.ConstantColumn(22);    // Lp
-                        cols.RelativeColumn(4);     // Nazwa
-                        cols.ConstantColumn(28);    // J.m.
-                        cols.ConstantColumn(42);    // Ilość
-                        cols.ConstantColumn(58);    // Cena netto
-                        if (hasDiscount) cols.ConstantColumn(48); // Rabat
-                        cols.ConstantColumn(60);    // Netto
-                        cols.ConstantColumn(32);    // VAT%
-                        cols.ConstantColumn(55);    // Kw. VAT
-                        cols.ConstantColumn(60);    // Brutto
-                        if (hasGtu) cols.ConstantColumn(38); // GTU
-                    });
-
-                    static IContainer HeaderCell(IContainer c) =>
-                        c.Background(Colors.Blue.Darken3).Padding(3)
-                         .DefaultTextStyle(x => x.FontSize(7.5f).Bold().FontColor(Colors.White));
-
-                    table.Header(h =>
-                    {
-                        h.Cell().Element(HeaderCell).Text("Lp");
-                        h.Cell().Element(HeaderCell).Text("Nazwa towaru/usługi");
-                        h.Cell().Element(HeaderCell).Text("J.m.");
-                        h.Cell().Element(HeaderCell).AlignRight().Text("Ilość");
-                        h.Cell().Element(HeaderCell).AlignRight().Text("Cena netto");
-                        if (hasDiscount) h.Cell().Element(HeaderCell).AlignRight().Text("Rabat");
-                        h.Cell().Element(HeaderCell).AlignRight().Text("Wart. netto");
-                        h.Cell().Element(HeaderCell).AlignCenter().Text("VAT%");
-                        h.Cell().Element(HeaderCell).AlignRight().Text("Kw. VAT");
-                        h.Cell().Element(HeaderCell).AlignRight().Text("Wart. brutto");
-                        if (hasGtu) h.Cell().Element(HeaderCell).AlignCenter().Text("GTU");
-                    });
-
-                    static IContainer DataCell(IContainer c) =>
-                        c.BorderBottom(1).BorderColor(Colors.Grey.Lighten2).PaddingVertical(3).PaddingHorizontal(4);
-
-                    foreach (var item in inv.LineItems)
-                    {
-                        table.Cell().Element(DataCell).Text($"{item.LineNumber}");
-                        table.Cell().Element(DataCell).Column(c =>
-                        {
-                            c.Item().Text(item.Name);
-                            foreach (var kv in item.AdditionalDescriptions)
-                                c.Item().Text($"  {kv.Key}: {kv.Value}").FontSize(7).FontColor(Colors.Grey.Darken1);
-                        });
-                        table.Cell().Element(DataCell).Text(item.Unit);
-                        table.Cell().Element(DataCell).AlignRight().Text($"{item.Quantity:N4}".TrimEnd('0').TrimEnd('.'));
-                        table.Cell().Element(DataCell).AlignRight().Text($"{item.UnitPriceNet:N2}");
-                        if (hasDiscount)
-                            table.Cell().Element(DataCell).AlignRight()
-                                 .Text(item.DiscountAmount != 0 ? $"{item.DiscountAmount:N2}" : "");
-                        table.Cell().Element(DataCell).AlignRight().Text($"{item.NetValue:N2}");
-                        table.Cell().Element(DataCell).AlignCenter().Text($"{item.VatRate}%");
-                        table.Cell().Element(DataCell).AlignRight().Text($"{item.VatAmount:N2}");
-                        table.Cell().Element(DataCell).AlignRight().Text($"{item.GrossValue:N2}");
-                        if (hasGtu)
-                            table.Cell().Element(DataCell).AlignCenter().Text(item.GtuCode);
-                    }
-                });
-            }
-            else
-            {
-                col.Item().Background(Colors.Grey.Lighten4).Padding(6)
-                   .Text("Szczegółowe pozycje faktury dostępne po pobraniu XML z KSeF.")
-                   .FontSize(8).FontColor(Colors.Grey.Darken2);
-            }
-
-            // Podsumowanie stawek VAT
-            col.Item().Row(row =>
-            {
-                row.RelativeItem(); // przestrzeń
-                row.ConstantItem(280).Column(summary =>
-                {
-                    // Tabela stawek VAT (jeśli dane z XML)
-                    if (inv.XmlLoaded && inv.LineItems.Count > 0)
-                    {
-                        summary.Item().Table(t =>
-                        {
-                            t.ColumnsDefinition(c => { c.RelativeColumn(); c.ConstantColumn(75); c.ConstantColumn(75); c.ConstantColumn(75); });
-                            static IContainer Th(IContainer c) =>
-                                c.Background(Colors.Grey.Lighten3).Padding(3)
-                                 .DefaultTextStyle(x => x.FontSize(7.5f).Bold());
-                            static IContainer Td(IContainer c) =>
-                                c.BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(3);
-
-                            t.Header(h =>
-                            {
-                                h.Cell().Element(Th).Text("Stawka VAT");
-                                h.Cell().Element(Th).AlignRight().Text("Netto");
-                                h.Cell().Element(Th).AlignRight().Text("VAT");
-                                h.Cell().Element(Th).AlignRight().Text("Brutto");
-                            });
-
-                            void VatRow(string label, decimal net, decimal vat)
-                            {
-                                if (net == 0 && vat == 0) return;
-                                t.Cell().Element(Td).Text(label);
-                                t.Cell().Element(Td).AlignRight().Text($"{net:N2}");
-                                t.Cell().Element(Td).AlignRight().Text($"{vat:N2}");
-                                t.Cell().Element(Td).AlignRight().Text($"{net + vat:N2}");
-                            }
-
-                            var items = inv.LineItems;
-                            VatRow("23%",  items.Where(i => i.VatRate == "23").Sum(i => i.NetValue),  inv.VatAmount23);
-                            VatRow("8%",   items.Where(i => i.VatRate == "8").Sum(i => i.NetValue),   inv.VatAmount8);
-                            VatRow("5%",   items.Where(i => i.VatRate == "5").Sum(i => i.NetValue),   inv.VatAmount5);
-                            VatRow("0%",   items.Where(i => i.VatRate == "0").Sum(i => i.NetValue),   inv.VatAmount0);
-                            VatRow("zw.",  items.Where(i => i.VatRate is "zw" or "zwol").Sum(i => i.NetValue), inv.VatAmountExempt);
-                            VatRow("np.",  items.Where(i => i.VatRate is "np" or "oo").Sum(i => i.NetValue), 0);
-                        });
-                        summary.Item().Height(4);
-                    }
-
-                    // Suma końcowa
-                    summary.Item().Row(r =>
-                    {
-                        r.RelativeItem().Text("Razem netto:").Bold();
-                        r.ConstantItem(85).AlignRight().Text($"{inv.TotalNetValue:N2} {inv.Currency}").Bold();
-                    });
-                    summary.Item().Row(r =>
-                    {
-                        r.RelativeItem().Text("Razem VAT:").Bold();
-                        r.ConstantItem(85).AlignRight().Text($"{inv.TotalVatValue:N2} {inv.Currency}").Bold();
-                    });
-                    summary.Item().BorderTop(2).BorderColor(Colors.Blue.Darken3).PaddingTop(4).Row(r =>
-                    {
-                        r.RelativeItem().Text("DO ZAPŁATY:").Bold().FontSize(12);
-                        r.ConstantItem(85).AlignRight()
-                         .Text($"{inv.TotalGrossValue:N2} {inv.Currency}").Bold().FontSize(12);
-                    });
-                });
-            });
-
-            // Płatność
-            col.Item().Border(1).BorderColor(Colors.Grey.Lighten2).Padding(8).Column(c =>
-            {
-                c.Item().Text("WARUNKI PŁATNOŚCI").Bold().FontSize(8).FontColor(Colors.Grey.Darken2);
+                c.Item().Text("Szczegóły").Bold().FontSize(10);
+                c.Item().Height(4);
                 c.Item().Row(r =>
                 {
-                    if (!string.IsNullOrEmpty(inv.PaymentMethod))
+                    r.RelativeItem().Column(left =>
                     {
-                        r.RelativeItem().Text($"Forma płatności: {PaymentMethodLabel(inv.PaymentMethod)}");
-                    }
-                    if (inv.PaymentDueDate.HasValue)
-                        r.RelativeItem().Text($"Termin: {inv.PaymentDueDate:dd.MM.yyyy}").Bold();
+                        left.Item().Text(text =>
+                        {
+                            text.Span("Data wystawienia, z zastrzeżeniem art. 106na ust. 1 ustawy: ")
+                                .FontSize(8);
+                            text.Span($"{inv.IssueDate:dd.MM.yyyy}").FontSize(8).Bold();
+                        });
+                        if (inv.SaleDate.HasValue)
+                            left.Item().Text(text =>
+                            {
+                                text.Span("Data dokonania lub zakończenia dostawy towarów lub wykonania usługi: ")
+                                    .FontSize(8);
+                                text.Span($"{inv.SaleDate:dd.MM.yyyy}").FontSize(8).Bold();
+                            });
+                    });
+                    if (!string.IsNullOrEmpty(inv.PlaceOfIssue))
+                        r.ConstantItem(180).Text(text =>
+                        {
+                            text.Span("Miejsce wystawienia: ").FontSize(8);
+                            text.Span(inv.PlaceOfIssue).FontSize(8).Bold();
+                        });
                 });
-                foreach (var iban in inv.BankAccountNumbers)
-                    c.Item().Text($"Rachunek: {FormatIban(iban)}").FontFamily("Courier New").FontSize(8);
-                if (!string.IsNullOrEmpty(inv.ContractNumber))
-                    c.Item().Text($"Nr umowy: {inv.ContractNumber}").FontSize(8);
+
+                // Adnotacje — widoczne tylko gdy aktywne
+                var flags = new List<string>();
+                if (inv.IsSplitPayment)   flags.Add("Mechanizm podzielonej płatności");
+                if (inv.IsReverseCharge)  flags.Add("Odwrotne obciążenie");
+                if (inv.IsCashAccounting) flags.Add("Metoda kasowa");
+                if (inv.IsSelfInvoicing)  flags.Add("Samofakturowanie");
+                if (flags.Count > 0)
+                {
+                    c.Item().Height(4);
+                    c.Item().Background(Colors.Orange.Lighten4).Padding(4)
+                        .Text(string.Join("   |   ", flags)).FontSize(8).Bold();
+                }
             });
 
-            // Informacje dodatkowe faktury
+            // Błąd parsowania XML — widoczne ostrzeżenie
+            if (!string.IsNullOrEmpty(inv.ParseError))
+            {
+                col.Item().Background(Colors.Red.Lighten4).Border(0.5f).BorderColor(Colors.Red.Medium)
+                    .Padding(6).Column(c =>
+                    {
+                        c.Item().Text("Błąd odczytu XML faktury — dane mogą być niekompletne")
+                            .Bold().FontSize(8).FontColor(Colors.Red.Darken2);
+                        c.Item().Text(inv.ParseError).FontSize(7).FontColor(Colors.Red.Darken1);
+                    });
+            }
+
+            // 3. Pozycje
+            col.Item().Column(c =>
+            {
+                c.Item().Text("Pozycje").Bold().FontSize(10);
+                c.Item().Height(4);
+                c.Item().Text($"Faktura wystawiona w cenach netto w walucie {inv.Currency}")
+                    .FontSize(8).FontColor(Colors.Grey.Darken1);
+                c.Item().Height(4);
+                c.Item().Element(e => BuildLineItemsTable(e, inv));
+
+                // Tabela identyfikatorów (GTIN/CN/Indeks) — jeśli są dane
+                if (inv.LineItems.Any(i => !string.IsNullOrEmpty(i.Gtin)
+                    || !string.IsNullOrEmpty(i.CnCode) || !string.IsNullOrEmpty(i.ProductIndex)))
+                {
+                    c.Item().Height(6);
+                    c.Item().Element(e => BuildProductCodesTable(e, inv));
+                }
+
+                // Kwota należności ogółem
+                c.Item().Height(6);
+                c.Item().AlignRight()
+                    .Text($"Kwota należności ogółem: {inv.TotalGrossValue:N2} {inv.Currency}")
+                    .Bold().FontSize(11);
+            });
+
+            // 4. Podsumowanie stawek
+            col.Item().Column(c =>
+            {
+                c.Item().Text("Podsumowanie stawek podatku").Bold().FontSize(10);
+                c.Item().Height(4);
+                c.Item().Element(e => BuildVatSummaryTable(e, inv));
+            });
+
+            // 5. Dodatkowe informacje
             if (inv.AdditionalNotes.Count > 0)
             {
                 col.Item().Column(c =>
                 {
-                    c.Item().Text("INFORMACJE DODATKOWE").Bold().FontSize(8).FontColor(Colors.Grey.Darken2);
-                    foreach (var kv in inv.AdditionalNotes)
-                        c.Item().Text($"{kv.Key}: {kv.Value}").FontSize(8);
+                    c.Item().Text("Dodatkowe informacje").Bold().FontSize(10);
+                    c.Item().Height(4);
+                    c.Item().Text("Dodatkowy opis").FontSize(8).Bold();
+                    c.Item().Height(2);
+                    c.Item().Element(e => BuildAdditionalNotesTable(e, inv.AdditionalNotes));
                 });
+            }
+
+            // 6. Płatność
+            col.Item().Column(c =>
+            {
+                c.Item().Text("Płatność").Bold().FontSize(10);
+                c.Item().Height(4);
+                c.Item().Border(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(8).Column(p =>
+                {
+                    if (inv.IsPaid)
+                    {
+                        p.Item().Text("Informacja o płatności: Zapłacono").FontSize(9).Bold();
+                        if (inv.PaymentDate.HasValue)
+                            p.Item().Text($"Data zapłaty: {inv.PaymentDate:dd.MM.yyyy}").FontSize(9);
+                    }
+                    if (!string.IsNullOrEmpty(inv.PaymentMethod))
+                        p.Item().Text($"Forma płatności: {PaymentMethodLabel(inv.PaymentMethod)}").FontSize(9);
+                    if (!inv.IsPaid && inv.PaymentDueDate.HasValue)
+                        p.Item().Text($"Termin płatności: {inv.PaymentDueDate:dd.MM.yyyy}").FontSize(9).Bold();
+                    foreach (var iban in inv.BankAccountNumbers)
+                        p.Item().Text($"Rachunek bankowy: {FormatIban(iban)}").FontSize(9).FontFamily("Courier New");
+                    if (!string.IsNullOrEmpty(inv.ContractNumber))
+                        p.Item().Text($"Nr umowy: {inv.ContractNumber}").FontSize(9);
+                });
+            });
+        });
+    }
+
+    // ─────────────────────────────────────────────────── TABLES ──
+
+    private static void BuildLineItemsTable(IContainer container, InvoiceRecord inv)
+    {
+        bool hasUuId   = inv.LineItems.Any(i => !string.IsNullOrEmpty(i.UuId));
+        bool hasDisc   = inv.LineItems.Any(i => i.DiscountAmount != 0);
+        bool hasGtu    = inv.LineItems.Any(i => !string.IsNullOrEmpty(i.GtuCode));
+        bool hasP9B    = inv.LineItems.Any(i => i.UnitPriceGross != 0);
+        bool hasP11Vat = inv.LineItems.Any(i => i.VatAmountLine != 0);
+
+        container.Table(table =>
+        {
+            table.ColumnsDefinition(cols =>
+            {
+                cols.ConstantColumn(20);   // Lp
+                if (hasUuId) cols.ConstantColumn(40); // UU_ID
+                cols.RelativeColumn(3);    // Nazwa
+                cols.ConstantColumn(48);   // Cena netto
+                if (hasP9B) cols.ConstantColumn(48); // Cena brutto
+                cols.ConstantColumn(38);   // Ilość
+                cols.ConstantColumn(28);   // J.m.
+                cols.ConstantColumn(30);   // Stawka
+                cols.ConstantColumn(52);   // Wart. netto
+                cols.ConstantColumn(52);   // Wart. brutto
+                if (hasP11Vat) cols.ConstantColumn(48); // Wart. VAT
+                if (hasGtu) cols.ConstantColumn(35);  // GTU
+            });
+
+            static IContainer Th(IContainer c) =>
+                c.Background(Colors.Grey.Lighten3).Border(0.5f).BorderColor(Colors.Grey.Lighten1)
+                 .Padding(3).DefaultTextStyle(x => x.FontSize(7.5f).Bold());
+
+            table.Header(h =>
+            {
+                h.Cell().Element(Th).Text("Lp.");
+                if (hasUuId) h.Cell().Element(Th).Text("Unikalny\nnumer wiersza");
+                h.Cell().Element(Th).Text("Nazwa towaru\nlub usługi");
+                h.Cell().Element(Th).AlignRight().Text("Cena\njedn.\nnetto");
+                if (hasP9B) h.Cell().Element(Th).AlignRight().Text("Cena jedn.\nbrutto");
+                h.Cell().Element(Th).AlignRight().Text("Ilość");
+                h.Cell().Element(Th).Text("Miara");
+                h.Cell().Element(Th).AlignCenter().Text("Stawka\npodatku");
+                h.Cell().Element(Th).AlignRight().Text("Wartość\nsprzedaży netto");
+                h.Cell().Element(Th).AlignRight().Text("Wartość\nsprzedaży brutto");
+                if (hasP11Vat) h.Cell().Element(Th).AlignRight().Text("Wartość\nsprzedaży vat");
+                if (hasGtu) h.Cell().Element(Th).AlignCenter().Text("GTU");
+            });
+
+            static IContainer Td(IContainer c) =>
+                c.Border(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(3);
+
+            foreach (var item in inv.LineItems)
+            {
+                table.Cell().Element(Td).Text($"{item.LineNumber}");
+                if (hasUuId) table.Cell().Element(Td).Text(item.UuId);
+                table.Cell().Element(Td).Column(c =>
+                {
+                    c.Item().Text(item.Name);
+                    foreach (var kv in item.AdditionalDescriptions)
+                        c.Item().Text($"  {kv.Key}: {kv.Value}").FontSize(7).FontColor(Colors.Grey.Darken1);
+                });
+                table.Cell().Element(Td).AlignRight().Text($"{item.UnitPriceNet:N2}");
+                if (hasP9B) table.Cell().Element(Td).AlignRight()
+                    .Text(item.UnitPriceGross != 0 ? $"{item.UnitPriceGross:N2}" : "");
+                table.Cell().Element(Td).AlignRight()
+                    .Text($"{item.Quantity:N5}".TrimEnd('0').TrimEnd(',').TrimEnd('.'));
+                table.Cell().Element(Td).Text(item.Unit);
+                table.Cell().Element(Td).AlignCenter().Text($"{item.VatRate}%");
+                table.Cell().Element(Td).AlignRight().Text($"{item.NetValue:N2}");
+                table.Cell().Element(Td).AlignRight().Text($"{item.GrossValue:N2}");
+                if (hasP11Vat) table.Cell().Element(Td).AlignRight()
+                    .Text(item.VatAmountLine != 0 ? $"{item.VatAmountLine:N2}" : "");
+                if (hasGtu) table.Cell().Element(Td).AlignCenter().Text(item.GtuCode);
             }
         });
     }
 
-    // ──────────────────────────────────────────────── FOOTER ──
+    private static void BuildProductCodesTable(IContainer container, InvoiceRecord inv)
+    {
+        container.Table(table =>
+        {
+            table.ColumnsDefinition(cols =>
+            {
+                cols.ConstantColumn(20);
+                cols.RelativeColumn();
+                cols.RelativeColumn();
+                cols.RelativeColumn();
+            });
+
+            static IContainer Th(IContainer c) =>
+                c.Background(Colors.Grey.Lighten3).Border(0.5f).BorderColor(Colors.Grey.Lighten1)
+                 .Padding(3).DefaultTextStyle(x => x.FontSize(7.5f).Bold());
+            static IContainer Td(IContainer c) =>
+                c.Border(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(3);
+
+            table.Header(h =>
+            {
+                h.Cell().Element(Th).Text("Lp.");
+                h.Cell().Element(Th).Text("GTIN");
+                h.Cell().Element(Th).Text("CN");
+                h.Cell().Element(Th).Text("Indeks");
+            });
+
+            foreach (var item in inv.LineItems)
+            {
+                if (string.IsNullOrEmpty(item.Gtin) && string.IsNullOrEmpty(item.CnCode)
+                    && string.IsNullOrEmpty(item.ProductIndex)) continue;
+                table.Cell().Element(Td).Text($"{item.LineNumber}");
+                table.Cell().Element(Td).Text(item.Gtin);
+                table.Cell().Element(Td).Text(item.CnCode);
+                table.Cell().Element(Td).Text(item.ProductIndex);
+            }
+        });
+    }
+
+    private static void BuildVatSummaryTable(IContainer container, InvoiceRecord inv)
+    {
+        // Grupuj pozycje po stawce
+        var vatGroups = inv.LineItems
+            .GroupBy(i => i.VatRate)
+            .Select(g => (
+                Rate: g.Key,
+                Net: g.Sum(i => i.NetValue),
+                Vat: g.Sum(i => i.VatAmountLine != 0 ? i.VatAmountLine : i.VatAmount),
+                Gross: g.Sum(i => i.GrossValue)
+            ))
+            .Where(x => x.Net != 0 || x.Vat != 0)
+            .ToList();
+
+        // Jeśli brak pozycji, użyj danych z nagłówka faktury
+        if (vatGroups.Count == 0)
+        {
+            // Dane z XML według stawek
+            vatGroups =
+            [
+                ("23", inv.VatAmount23 != 0 ? inv.TotalNetValue - inv.VatAmount8 - inv.VatAmount5 - inv.VatAmount0 - inv.VatAmountExempt : 0,
+                       inv.VatAmount23, inv.VatAmount23 != 0 ? inv.TotalNetValue - inv.VatAmount8 - inv.VatAmount5 - inv.VatAmount0 - inv.VatAmountExempt + inv.VatAmount23 : 0),
+                ("8",  inv.VatAmount8  != 0 ? 0 : 0, inv.VatAmount8,  0),
+                ("5",  inv.VatAmount5  != 0 ? 0 : 0, inv.VatAmount5,  0),
+                ("0",  inv.VatAmount0  != 0 ? 0 : 0, inv.VatAmount0,  0),
+            ];
+            vatGroups = vatGroups.Where(x => x.Vat != 0).ToList();
+
+            // Jeśli nadal brak danych (XML nie załadowany) — pokaż wiersz zbiorczy z sumy nagłówkowej
+            if (vatGroups.Count == 0 && inv.TotalGrossValue != 0)
+            {
+                vatGroups =
+                [
+                    ("—", inv.TotalNetValue, inv.TotalVatValue, inv.TotalGrossValue)
+                ];
+            }
+        }
+
+        container.Table(table =>
+        {
+            table.ColumnsDefinition(cols =>
+            {
+                cols.ConstantColumn(20);
+                cols.RelativeColumn(2);
+                cols.RelativeColumn(3);
+                cols.RelativeColumn(3);
+                cols.RelativeColumn(3);
+            });
+
+            static IContainer Th(IContainer c) =>
+                c.Background(Colors.Grey.Lighten3).Border(0.5f).BorderColor(Colors.Grey.Lighten1)
+                 .Padding(3).DefaultTextStyle(x => x.FontSize(8).Bold());
+            static IContainer Td(IContainer c) =>
+                c.Border(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(3);
+
+            table.Header(h =>
+            {
+                h.Cell().Element(Th).Text("Lp.");
+                h.Cell().Element(Th).Text("Stawka podatku");
+                h.Cell().Element(Th).AlignRight().Text("Kwota netto");
+                h.Cell().Element(Th).AlignRight().Text("Kwota podatku");
+                h.Cell().Element(Th).AlignRight().Text("Kwota brutto");
+            });
+
+            int lp = 1;
+            foreach (var g in vatGroups)
+            {
+                table.Cell().Element(Td).Text($"{lp++}");
+                table.Cell().Element(Td).Text(g.Rate == "—" ? "—" : $"{g.Rate}% lub {NextRate(g.Rate)}%");
+                table.Cell().Element(Td).AlignRight().Text($"{g.Net:N2}");
+                table.Cell().Element(Td).AlignRight().Text($"{g.Vat:N2}");
+                table.Cell().Element(Td).AlignRight().Text($"{g.Gross:N2}");
+            }
+        });
+    }
+
+    private static void BuildAdditionalNotesTable(IContainer container,
+        IReadOnlyList<KeyValuePair<string, string>> notes)
+    {
+        container.Table(table =>
+        {
+            table.ColumnsDefinition(cols =>
+            {
+                cols.ConstantColumn(20);
+                cols.RelativeColumn(2);
+                cols.RelativeColumn(4);
+            });
+
+            static IContainer Th(IContainer c) =>
+                c.Background(Colors.Grey.Lighten3).Border(0.5f).BorderColor(Colors.Grey.Lighten1)
+                 .Padding(3).DefaultTextStyle(x => x.FontSize(8).Bold());
+            static IContainer Td(IContainer c) =>
+                c.Border(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(3);
+
+            table.Header(h =>
+            {
+                h.Cell().Element(Th).Text("Lp.");
+                h.Cell().Element(Th).Text("Rodzaj informacji");
+                h.Cell().Element(Th).Text("Treść informacji");
+            });
+
+            int lp = 1;
+            foreach (var kv in notes)
+            {
+                table.Cell().Element(Td).Text($"{lp++}");
+                table.Cell().Element(Td).Text(kv.Key);
+                table.Cell().Element(Td).Text(kv.Value);
+            }
+        });
+    }
+
+    // ─────────────────────────────────────────────────── FOOTER ──
 
     private static void BuildFooter(IContainer container, InvoiceRecord inv)
     {
@@ -313,10 +464,11 @@ public sealed class PdfExportService : IPdfExportService
             {
                 row.RelativeItem().Text(text =>
                 {
-                    text.Span("Wygenerowano przez KSeF Assistant | ").FontSize(7).FontColor(Colors.Grey.Medium);
-                    text.Span($"Pobrano: {inv.AcquisitionDate:dd.MM.yyyy HH:mm}").FontSize(7).FontColor(Colors.Grey.Medium);
+                    text.Span("Wygenerowano przez KSeF Assistant").FontSize(7).FontColor(Colors.Grey.Medium);
+                    if (inv.AcquisitionDate != default)
+                        text.Span($"  |  Pobrano z KSeF: {inv.AcquisitionDate:dd.MM.yyyy HH:mm}").FontSize(7).FontColor(Colors.Grey.Medium);
                 });
-                row.ConstantItem(120).AlignRight().Text(text =>
+                row.ConstantItem(100).AlignRight().Text(text =>
                 {
                     text.Span("Strona ").FontSize(7).FontColor(Colors.Grey.Medium);
                     text.CurrentPageNumber().FontSize(7).FontColor(Colors.Grey.Medium);
@@ -329,54 +481,84 @@ public sealed class PdfExportService : IPdfExportService
         });
     }
 
-    // ──────────────────────────────────────────────── HELPERS ──
+    // ─────────────────────────────────────────────────── PARTY BOX ──
 
-    private static string InvoiceTypeTitle(string code) => code switch
+    private static void BuildPartyBox(ColumnDescriptor col, string title,
+        string nip, string name, string street, string postCode, string city, string country)
     {
-        "Kor"    or "KorZal" or "KorRoz" => "KOREKTA FAKTURY VAT",
-        "Zal"                             => "FAKTURA ZALICZKOWA",
-        "Roz"                             => "FAKTURA ROZLICZENIOWA",
-        "Upr"                             => "FAKTURA UPROSZCZONA",
-        "VatRr"                           => "FAKTURA VAT RR",
-        _                                 => "FAKTURA VAT"
-    };
+        col.Item().Border(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(8).Column(c =>
+        {
+            c.Item().Text(title).Bold().FontSize(10);
+            c.Item().Height(4);
+            c.Item().Text(text =>
+            {
+                text.Span("NIP: ").FontSize(8).Bold();
+                text.Span(nip).FontSize(8);  // bez formatowania — tak jak w oficjalnym KSeF
+            });
+            // Nazwa może zawierać \n (np. BDO na osobnej linii)
+            var nameLines = name.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
+            c.Item().Text(text =>
+            {
+                text.Span("Nazwa: ").FontSize(8).Bold();
+                text.Span(nameLines.FirstOrDefault() ?? name).FontSize(8);
+            });
+            foreach (var extra in nameLines.Skip(1))
+                c.Item().Text(extra.Trim()).FontSize(8);
+            if (!string.IsNullOrEmpty(street) || !string.IsNullOrEmpty(city))
+            {
+                c.Item().Height(4);
+                c.Item().Text("Adres").FontSize(8).Bold();
+                // Format: "Ulica 1, 00-000 Miasto" (jedna linia jak w oficjalnym PDF)
+                var adresLine = string.Join(", ",
+                    new[] { street, $"{postCode} {city}".Trim() }
+                    .Where(s => !string.IsNullOrEmpty(s)));
+                if (!string.IsNullOrEmpty(adresLine))
+                    c.Item().Text(adresLine).FontSize(8);
+                if (!string.IsNullOrEmpty(country))
+                    c.Item().Text(country).FontSize(8);
+            }
+        });
+    }
+
+    // ─────────────────────────────────────────────────── HELPERS ──
 
     private static string InvoiceTypeLabel(string code) => code switch
     {
-        "Vat"    => "Faktura VAT",
-        "Zal"    => "Zaliczkowa",
-        "Kor"    => "Korekta",
-        "Roz"    => "Rozliczeniowa",
-        "Upr"    => "Uproszczona",
-        "KorZal" => "Korekta zaliczkowej",
-        "KorRoz" => "Korekta rozliczeniowej",
-        "VatRr"  => "Faktura RR",
-        _        => code
+        "Kor"    or "KorZal" or "KorRoz" => "Korekta faktury",
+        "Zal"                             => "Faktura zaliczkowa",
+        "Roz"                             => "Faktura rozliczeniowa",
+        "Upr"                             => "Faktura uproszczona",
+        "VatRr"                           => "Faktura VAT RR",
+        _                                 => "Faktura podstawowa"
     };
 
     private static string PaymentMethodLabel(string code) => code switch
     {
-        "1" => "gotówka",
-        "2" => "karta",
-        "3" => "bon",
-        "4" => "czek",
-        "5" => "kredyt",
-        "6" => "przelew",
-        "7" => "mobilna",
+        "1" => "Gotówka",
+        "2" => "Karta",
+        "3" => "Bon",
+        "4" => "Czek",
+        "5" => "Kredyt",
+        "6" => "Przelew",
+        "7" => "Mobilna",
         _   => code
     };
 
-    private static string FormatNip(string nip) =>
-        nip.Length == 10 ? $"{nip[..3]}-{nip[3..6]}-{nip[6..8]}-{nip[8..]}" : nip;
+    /// <summary>Drugi wariant stawki VAT wyświetlany w tabeli (np. 23% lub 22%).</summary>
+    private static string NextRate(string rate) => rate switch
+    {
+        "23" => "22",
+        "8"  => "7",
+        "5"  => "4",
+        "0"  => "0",
+        _    => rate
+    };
 
     private static string FormatIban(string iban)
     {
-        // Formatuj IBAN co 4 znaki dla czytelności
         iban = iban.Replace(" ", "");
-        return iban.Length > 4
-            ? string.Join(" ", Enumerable.Range(0, (iban.Length + 3) / 4)
-                .Select(i => iban.Substring(i * 4, Math.Min(4, iban.Length - i * 4))))
-            : iban;
+        return string.Join(" ", Enumerable.Range(0, (iban.Length + 3) / 4)
+            .Select(i => iban.Substring(i * 4, Math.Min(4, iban.Length - i * 4))));
     }
 
     private static string SanitizeFileName(string name)

@@ -66,7 +66,25 @@ public sealed class KSeFService : IKSeFService
     {
         var client = _factory.Create(session.Environment);
         var xml = await client.DownloadInvoiceXmlAsync(session.AccessToken, invoice.KSeFNumber, ct);
-        return _mapper.EnrichFromXml(invoice, xml);
+
+        _logger.LogInformation("Pobrano XML dla {KSeFNumber}: {Len} znaków, pierwsze 200: {Preview}",
+            invoice.KSeFNumber, xml?.Length ?? 0,
+            xml?.Length > 200 ? xml[..200] : xml);
+
+        var enriched = _mapper.EnrichFromXml(invoice, xml!);
+
+        if (enriched.LineItems.Count == 0 || enriched.ParseError != null)
+        {
+            // Zapisz XML do %TEMP% dla diagnozy
+            var safeNum = string.Join("_", invoice.KSeFNumber.Split(Path.GetInvalidFileNameChars()));
+            var debugPath = Path.Combine(Path.GetTempPath(), $"ksef_debug_{safeNum}.xml");
+            await File.WriteAllTextAsync(debugPath, xml ?? "(null)", ct);
+            _logger.LogWarning(
+                "Faktura {KSeFNumber}: pozycji={Items}, ParseError={Err}. XML zapisany: {Path}",
+                invoice.KSeFNumber, enriched.LineItems.Count, enriched.ParseError, debugPath);
+        }
+
+        return enriched;
     }
 
     public async Task LogoutAsync(SessionContext session, CancellationToken ct = default)

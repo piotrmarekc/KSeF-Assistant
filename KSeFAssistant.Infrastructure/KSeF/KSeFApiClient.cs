@@ -173,7 +173,7 @@ public sealed class KSeFApiClient
     public async Task<string> DownloadInvoiceXmlAsync(string accessToken, string ksefNumber, CancellationToken ct)
     {
         return await RetryOnRateLimitAsync(async () =>
-            await UnwrapAsync(await _api.DownloadInvoiceXmlAsync($"Bearer {accessToken}", ksefNumber, ct)), ct);
+            await _api.DownloadInvoiceXmlAsync($"Bearer {accessToken}", ksefNumber, ct), ct);
     }
 
     // =====================================================================

@@ -216,6 +216,13 @@ public sealed partial class InvoiceListViewModel : ObservableObject
                 try
                 {
                     var enriched = await _ksefService.LoadInvoiceXmlAsync(_activeSession, invoice, ct);
+                    if (enriched.LineItems.Count == 0 || enriched.ParseError != null)
+                    {
+                        var safeNum = string.Join("_", invoice.KSeFNumber.Split(Path.GetInvalidFileNameChars()));
+                        var debugPath = Path.Combine(Path.GetTempPath(), $"ksef_debug_{safeNum}.xml");
+                        DispatcherQueue?.TryEnqueue(() =>
+                            StatusMessage = $"Uwaga: brak pozycji dla {invoice.InvoiceNumber}. XML: {debugPath}");
+                    }
                     var bytes = await _pdfService.GeneratePdfAsync(enriched, ct);
                     var filePath = Path.Combine(outputFolder, _pdfService.GetFileName(enriched));
                     await File.WriteAllBytesAsync(filePath, bytes, ct);
