@@ -10,7 +10,11 @@ public sealed partial class ExportViewModel : ObservableObject
 {
     private readonly IPdfExportService _pdfService;
     private readonly IExcelReportService _excelService;
+    private readonly IKSeFService _ksefService;
     private readonly ILogger<ExportViewModel> _logger;
+
+    /// <summary>Aktywna sesja KSeF — wymagana do pobierania XML przed generowaniem PDF.</summary>
+    public SessionContext? Session { get; set; }
 
     private string _pdfOutputFolder = string.Empty;
     public string PdfOutputFolder { get => _pdfOutputFolder; set => SetProperty(ref _pdfOutputFolder, value); }
@@ -40,10 +44,11 @@ public sealed partial class ExportViewModel : ObservableObject
     public ExportResult? LastResult { get => _lastResult; set => SetProperty(ref _lastResult, value); }
 
     public ExportViewModel(IPdfExportService pdfService, IExcelReportService excelService,
-        ILogger<ExportViewModel> logger)
+        IKSeFService ksefService, ILogger<ExportViewModel> logger)
     {
         _pdfService = pdfService;
         _excelService = excelService;
+        _ksefService = ksefService;
         _logger = logger;
 
         // Domyślny folder PDF: Pulpit
@@ -82,6 +87,13 @@ public sealed partial class ExportViewModel : ObservableObject
                 await semaphore.WaitAsync(ct);
                 try
                 {
+                    // Załaduj pełny XML (pozycje, adresy) jeśli jeszcze nie załadowany
+                    if (!invoice.XmlLoaded && Session is not null)
+                    {
+                        try { invoice = await _ksefService.LoadInvoiceXmlAsync(Session, invoice, ct); }
+                        catch (Exception ex) { _logger.LogWarning(ex, "Nie udało się pobrać XML dla {KSeFNumber}", invoice.KSeFNumber); }
+                    }
+
                     var bytes = await _pdfService.GeneratePdfAsync(invoice, ct);
                     var fileName = _pdfService.GetFileName(invoice);
                     var filePath = Path.Combine(PdfOutputFolder, fileName);

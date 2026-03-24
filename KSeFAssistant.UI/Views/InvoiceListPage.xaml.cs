@@ -51,7 +51,7 @@ public sealed partial class InvoiceListPage : Page
             return;
         }
 
-        var exportDialog = new ExportDialog(selected) { XamlRoot = XamlRoot };
+        var exportDialog = new ExportDialog(selected, ViewModel.ActiveSession) { XamlRoot = XamlRoot };
         await exportDialog.ShowAsync();
     }
 }
