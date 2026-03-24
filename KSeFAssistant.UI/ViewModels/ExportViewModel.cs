@@ -12,15 +12,32 @@ public sealed partial class ExportViewModel : ObservableObject
     private readonly IExcelReportService _excelService;
     private readonly ILogger<ExportViewModel> _logger;
 
-    [ObservableProperty] private string _pdfOutputFolder = string.Empty;
-    [ObservableProperty] private bool _generateExcel = true;
-    [ObservableProperty] private string _excelOutputPath = string.Empty;
-    [ObservableProperty] private bool _isBusy;
-    [ObservableProperty] private int _progressValue;
-    [ObservableProperty] private int _progressMax = 1;
-    [ObservableProperty] private string _statusMessage = string.Empty;
-    [ObservableProperty] private bool _isComplete;
-    [ObservableProperty] private ExportResult? _lastResult;
+    private string _pdfOutputFolder = string.Empty;
+    public string PdfOutputFolder { get => _pdfOutputFolder; set => SetProperty(ref _pdfOutputFolder, value); }
+
+    private bool _generateExcel = true;
+    public bool GenerateExcel { get => _generateExcel; set => SetProperty(ref _generateExcel, value); }
+
+    private string _excelOutputPath = string.Empty;
+    public string ExcelOutputPath { get => _excelOutputPath; set => SetProperty(ref _excelOutputPath, value); }
+
+    private bool _isBusy;
+    public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+
+    private int _progressValue;
+    public int ProgressValue { get => _progressValue; set => SetProperty(ref _progressValue, value); }
+
+    private int _progressMax = 1;
+    public int ProgressMax { get => _progressMax; set => SetProperty(ref _progressMax, value); }
+
+    private string _statusMessage = string.Empty;
+    public string StatusMessage { get => _statusMessage; set => SetProperty(ref _statusMessage, value); }
+
+    private bool _isComplete;
+    public bool IsComplete { get => _isComplete; set => SetProperty(ref _isComplete, value); }
+
+    private ExportResult? _lastResult;
+    public ExportResult? LastResult { get => _lastResult; set => SetProperty(ref _lastResult, value); }
 
     public ExportViewModel(IPdfExportService pdfService, IExcelReportService excelService,
         ILogger<ExportViewModel> logger)
@@ -32,6 +49,16 @@ public sealed partial class ExportViewModel : ObservableObject
         // Domyślny folder PDF: Pulpit
         PdfOutputFolder = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         ExcelOutputPath = Path.Combine(PdfOutputFolder, $"KSeF_raport_{DateTime.Today:yyyy-MM}.xlsx");
+    }
+
+    /// <summary>
+    /// Called from code-behind to start export without going through the ICommand interface.
+    /// </summary>
+    public async Task StartExportAsync(IReadOnlyList<InvoiceRecord> invoices)
+    {
+        var parameters = new ExportParameters { Invoices = invoices };
+        if (!CanExport(parameters)) return;
+        await ExportAsync(parameters, CancellationToken.None);
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]

@@ -12,16 +12,43 @@ public sealed partial class AuthViewModel : ObservableObject
     private readonly IKSeFService _ksefService;
     private readonly ILogger<AuthViewModel> _logger;
 
-    [ObservableProperty] private string _nip = string.Empty;
-    [ObservableProperty] private string _apiToken = string.Empty;
-    [ObservableProperty] private string _certificatePath = string.Empty;
-    [ObservableProperty] private string _certificatePassword = string.Empty;
-    [ObservableProperty] private KSeFEnvironment _selectedEnvironment = KSeFEnvironment.Test;
-    [ObservableProperty] private AuthMethod _selectedAuthMethod = AuthMethod.Token;
-    [ObservableProperty] private bool _isTokenMode = true;
-    [ObservableProperty] private bool _isBusy;
-    [ObservableProperty] private string _statusMessage = string.Empty;
-    [ObservableProperty] private bool _isStatusSuccess;
+    private string _nip = string.Empty;
+    public string Nip { get => _nip; set => SetProperty(ref _nip, value); }
+
+    private string _apiToken = string.Empty;
+    public string ApiToken { get => _apiToken; set => SetProperty(ref _apiToken, value); }
+
+    private string _certificatePath = string.Empty;
+    public string CertificatePath { get => _certificatePath; set => SetProperty(ref _certificatePath, value); }
+
+    private string _certificatePassword = string.Empty;
+    public string CertificatePassword { get => _certificatePassword; set => SetProperty(ref _certificatePassword, value); }
+
+    private KSeFEnvironment _selectedEnvironment = KSeFEnvironment.Test;
+    public KSeFEnvironment SelectedEnvironment { get => _selectedEnvironment; set => SetProperty(ref _selectedEnvironment, value); }
+
+    private AuthMethod _selectedAuthMethod = AuthMethod.Token;
+    public AuthMethod SelectedAuthMethod
+    {
+        get => _selectedAuthMethod;
+        set
+        {
+            if (SetProperty(ref _selectedAuthMethod, value))
+                IsTokenMode = value == AuthMethod.Token;
+        }
+    }
+
+    private bool _isTokenMode = true;
+    public bool IsTokenMode { get => _isTokenMode; set => SetProperty(ref _isTokenMode, value); }
+
+    private bool _isBusy;
+    public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+
+    private string _statusMessage = string.Empty;
+    public string StatusMessage { get => _statusMessage; set => SetProperty(ref _statusMessage, value); }
+
+    private bool _isStatusSuccess;
+    public bool IsStatusSuccess { get => _isStatusSuccess; set => SetProperty(ref _isStatusSuccess, value); }
 
     public IReadOnlyList<KSeFEnvironment> Environments { get; } =
         [KSeFEnvironment.Test, KSeFEnvironment.Demo, KSeFEnvironment.Production];
@@ -29,12 +56,16 @@ public sealed partial class AuthViewModel : ObservableObject
     public IReadOnlyList<AuthMethod> AuthMethods { get; } =
         [AuthMethod.Token, AuthMethod.Certificate];
 
+    public IAsyncRelayCommand TestConnectionCommand { get; }
+
     public AuthViewModel(ICredentialManager credentials, IKSeFService ksefService,
         ILogger<AuthViewModel> logger)
     {
         _credentials = credentials;
         _ksefService = ksefService;
         _logger = logger;
+
+        TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync, CanTestConnection);
 
         LoadSavedSettings();
     }
@@ -47,11 +78,6 @@ public sealed partial class AuthViewModel : ObservableObject
         CertificatePath = _credentials.LoadCertificatePath() ?? string.Empty;
         IsTokenMode = SelectedAuthMethod == AuthMethod.Token;
         // Tokenów nie ładujemy do pola tekstowego ze względów bezpieczeństwa
-    }
-
-    partial void OnSelectedAuthMethodChanged(AuthMethod value)
-    {
-        IsTokenMode = value == AuthMethod.Token;
     }
 
     [RelayCommand]
@@ -87,9 +113,9 @@ public sealed partial class AuthViewModel : ObservableObject
         SetStatus("Ustawienia zostały zapisane.", true);
         _logger.LogInformation("Ustawienia uwierzytelnienia zapisane (NIP: {Nip}, Środowisko: {Env})",
             Nip, SelectedEnvironment);
+        TestConnectionCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand(CanExecute = nameof(CanTestConnection))]
     private async Task TestConnectionAsync(CancellationToken ct)
     {
         IsBusy = true;

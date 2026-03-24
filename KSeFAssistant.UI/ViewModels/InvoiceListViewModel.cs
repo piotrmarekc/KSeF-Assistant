@@ -19,17 +19,33 @@ public sealed partial class InvoiceListViewModel : ObservableObject
     private List<InvoiceItemViewModel> _allInvoices = [];
 
     // --- Filtry ---
-    [ObservableProperty] private int _selectedYear = DateTime.Today.Year;
-    [ObservableProperty] private int _selectedMonth = DateTime.Today.Month;
-    [ObservableProperty] private bool _filterByNip;
+    private int _selectedYear = DateTime.Today.Year;
+    public int SelectedYear { get => _selectedYear; set => SetProperty(ref _selectedYear, value); }
+
+    private int _selectedMonth = DateTime.Today.Month;
+    public int SelectedMonth { get => _selectedMonth; set => SetProperty(ref _selectedMonth, value); }
+
+    private bool _filterByNip;
+    public bool FilterByNip { get => _filterByNip; set => SetProperty(ref _filterByNip, value); }
 
     // --- Stan ---
-    [ObservableProperty] private bool _isBusy;
-    [ObservableProperty] private string _statusMessage = "Skonfiguruj ustawienia i pobierz faktury.";
-    [ObservableProperty] private int _progressValue;
-    [ObservableProperty] private int _progressMax = 100;
-    [ObservableProperty] private bool _isProgressVisible;
-    [ObservableProperty] private int _selectedCount;
+    private bool _isBusy;
+    public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+
+    private string _statusMessage = "Skonfiguruj ustawienia i pobierz faktury.";
+    public string StatusMessage { get => _statusMessage; set => SetProperty(ref _statusMessage, value); }
+
+    private int _progressValue;
+    public int ProgressValue { get => _progressValue; set => SetProperty(ref _progressValue, value); }
+
+    private int _progressMax = 100;
+    public int ProgressMax { get => _progressMax; set => SetProperty(ref _progressMax, value); }
+
+    private bool _isProgressVisible;
+    public bool IsProgressVisible { get => _isProgressVisible; set => SetProperty(ref _isProgressVisible, value); }
+
+    private int _selectedCount;
+    public int SelectedCount { get => _selectedCount; private set => SetProperty(ref _selectedCount, value); }
 
     // --- Dane ---
     public ObservableCollection<InvoiceItemViewModel> DisplayedInvoices { get; } = [];
@@ -194,7 +210,9 @@ public sealed partial class InvoiceListViewModel : ObservableObject
 
 public sealed partial class SupplierFilterItem : ObservableObject
 {
-    [ObservableProperty] private bool _isSelected;
+    private bool _isSelected;
+    public bool IsSelected { get => _isSelected; set => SetProperty(ref _isSelected, value); }
+
     public string Nip { get; }
     public string Name { get; }
     public string DisplayText => $"{Name} ({Nip})";

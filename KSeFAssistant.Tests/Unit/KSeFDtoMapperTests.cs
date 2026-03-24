@@ -12,30 +12,23 @@ public sealed class KSeFDtoMapperTests
     private readonly KSeFDtoMapper _sut = new(NullLogger<KSeFDtoMapper>.Instance);
 
     [Fact]
-    public void MapFromHeader_ValidDto_MapsBasicFields()
+    public void MapFromInvoiceSummary_ValidDto_MapsBasicFields()
     {
-        var dto = new InvoiceHeaderDto
+        var dto = new InvoiceSummaryDto
         {
-            KSeFReferenceNumber = "KSeF-12345",
-            InvoiceReferenceNumber = "FV/001/2025",
-            InvoicingDate = "2025-01-15",
-            AcquisitionTimestamp = "2025-01-15T10:00:00Z",
-            Net = 1000m,
-            Gross = 1230m,
+            KsefNumber = "KSeF-12345",
+            InvoiceNumber = "FV/001/2025",
+            IssueDate = new DateTimeOffset(2025, 1, 15, 0, 0, 0, TimeSpan.Zero),
+            AcquisitionDate = new DateTimeOffset(2025, 1, 15, 10, 0, 0, TimeSpan.Zero),
+            NetAmount = 1000m,
+            GrossAmount = 1230m,
+            VatAmount = 230m,
             Currency = "PLN",
-            SubjectBy = new InvoiceSubjectDto
-            {
-                Identifier = new SubjectIdentifierDto { Type = "onip", Identifier = "1234567890" },
-                Name = new SubjectNameDto { FullName = "Firma Testowa Sp. z o.o." }
-            },
-            SubjectTo = new InvoiceSubjectDto
-            {
-                Identifier = new SubjectIdentifierDto { Type = "onip", Identifier = "9876543210" },
-                Name = new SubjectNameDto { FullName = "Nabywca S.A." }
-            }
+            Seller = new InvoicePartyDto { Nip = "1234567890", Name = "Firma Testowa Sp. z o.o." },
+            Buyer  = new InvoicePartyDto { Nip = "9876543210", Name = "Nabywca S.A." }
         };
 
-        var result = _sut.MapFromHeader(dto);
+        var result = _sut.MapFromInvoiceSummary(dto);
 
         result.KSeFNumber.Should().Be("KSeF-12345");
         result.InvoiceNumber.Should().Be("FV/001/2025");
@@ -44,6 +37,7 @@ public sealed class KSeFDtoMapperTests
         result.SellerName.Should().Be("Firma Testowa Sp. z o.o.");
         result.BuyerNip.Should().Be("9876543210");
         result.TotalNetValue.Should().Be(1000m);
+        result.TotalVatValue.Should().Be(230m);
         result.TotalGrossValue.Should().Be(1230m);
         result.Currency.Should().Be("PLN");
         result.XmlLoaded.Should().BeFalse();

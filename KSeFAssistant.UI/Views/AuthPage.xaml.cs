@@ -1,3 +1,4 @@
+using KSeFAssistant.Core.Models;
 using KSeFAssistant.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
@@ -12,7 +13,24 @@ public sealed partial class AuthPage : Page
     public AuthPage()
     {
         ViewModel = App.Services.GetRequiredService<AuthViewModel>();
+        this.DataContext = ViewModel;
         this.InitializeComponent();
+        EnvironmentCombo.ItemsSource = ViewModel.Environments;
+        EnvironmentCombo.SelectedItem = ViewModel.SelectedEnvironment;
+        AuthMethodCombo.ItemsSource = ViewModel.AuthMethods;
+        AuthMethodCombo.SelectedItem = ViewModel.SelectedAuthMethod;
+    }
+
+    private void EnvironmentCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.AddedItems.FirstOrDefault() is KSeFEnvironment env)
+            ViewModel.SelectedEnvironment = env;
+    }
+
+    private void AuthMethodCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.AddedItems.FirstOrDefault() is AuthMethod method)
+            ViewModel.SelectedAuthMethod = method;
     }
 
     private async void BrowseCertificate_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -28,6 +46,9 @@ public sealed partial class AuthPage : Page
         WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
 
         picker.FileTypeFilter.Add(".pfx");
+        picker.FileTypeFilter.Add(".p12");
+        picker.FileTypeFilter.Add(".crt");
+        picker.FileTypeFilter.Add(".cer");
         picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
 
         var file = await picker.PickSingleFileAsync();

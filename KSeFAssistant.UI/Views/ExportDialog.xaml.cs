@@ -16,6 +16,7 @@ public sealed partial class ExportDialog : ContentDialog
         _invoices = invoices;
         ViewModel = App.Services.GetRequiredService<ExportViewModel>();
         ViewModel.DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        this.DataContext = ViewModel;
         this.InitializeComponent();
 
         InvoiceCountBar.Message = $"Zostaną wyeksportowane {invoices.Count} faktury.";
@@ -36,8 +37,7 @@ public sealed partial class ExportDialog : ContentDialog
         IsPrimaryButtonEnabled = false;
         IsSecondaryButtonEnabled = false;
 
-        var parameters = new ExportParameters { Invoices = _invoices };
-        await ViewModel.ExportCommand.ExecuteAsync(parameters);
+        await ViewModel.StartExportAsync(_invoices);
 
         if (ViewModel.IsComplete)
         {

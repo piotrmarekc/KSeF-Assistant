@@ -3,6 +3,8 @@ using KSeFAssistant.Core.Models;
 using KSeFAssistant.Infrastructure.KSeF;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
@@ -19,17 +21,21 @@ public sealed class KSeFServiceIntegrationTests : IDisposable
 {
     private readonly WireMockServer _server;
     private readonly KSeFService _sut;
-    private readonly KSeFApiClientFactory _factory;
+    private readonly string _testCertBase64;
 
     public KSeFServiceIntegrationTests()
     {
         _server = WireMockServer.Start();
 
-        // Nadpisujemy bazowy URL na lokalny mock server
-        // W prawdziwej implementacji KSeFApiClientFactory przyjmuje nadpisany URL
+        // Generujemy testowy certyfikat RSA (self-signed) — klient zaszyfruje nim token
+        using var rsa = RSA.Create(2048);
+        var certReq = new CertificateRequest("cn=KSeFTest", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        using var cert = certReq.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+        _testCertBase64 = Convert.ToBase64String(cert.Export(X509ContentType.Cert));
+
         var loggerFactory = NullLoggerFactory.Instance;
-        _factory = new KSeFApiClientFactory(loggerFactory, _server.Url!);
-        _sut = new KSeFService(_factory, new KSeFDtoMapper(NullLogger<KSeFDtoMapper>.Instance),
+        var factory = new KSeFApiClientFactory(loggerFactory, _server.Url!);
+        _sut = new KSeFService(factory, new KSeFDtoMapper(NullLogger<KSeFDtoMapper>.Instance),
             NullLogger<KSeFService>.Instance);
     }
 
@@ -37,15 +43,18 @@ public sealed class KSeFServiceIntegrationTests : IDisposable
     public async Task AuthenticateWithTokenAsync_ValidCredentials_ReturnsSession()
     {
         // Arrange
-        SetupChallenge();
-        SetupInitToken();
+        SetupPublicKeyCertificates();
+        SetupAuthChallenge();
+        SetupKsefToken();
+        SetupAuthStatus();
+        SetupTokenRedeem();
 
         // Act
         var session = await _sut.AuthenticateWithTokenAsync(
             "1234567890", "test-api-token", KSeFEnvironment.Test);
 
         // Assert
-        session.SessionToken.Should().Be("mock-session-token-xyz");
+        session.AccessToken.Should().Be("mock-access-token");
         session.Nip.Should().Be("1234567890");
         session.Environment.Should().Be(KSeFEnvironment.Test);
         session.IsExpired.Should().BeFalse();
@@ -55,11 +64,12 @@ public sealed class KSeFServiceIntegrationTests : IDisposable
     public async Task GetPurchaseInvoicesAsync_WithResults_ReturnsInvoices()
     {
         // Arrange
-        SetupChallenge();
-        SetupInitToken();
-        SetupInvoiceQuery();
-        SetupQueryStatusCompleted(numberOfParts: 1);
-        SetupQueryResultPart0();
+        SetupPublicKeyCertificates();
+        SetupAuthChallenge();
+        SetupKsefToken();
+        SetupAuthStatus();
+        SetupTokenRedeem();
+        SetupInvoiceMetadata();
 
         var session = await _sut.AuthenticateWithTokenAsync(
             "1234567890", "test-api-token", KSeFEnvironment.Test);
@@ -83,116 +93,140 @@ public sealed class KSeFServiceIntegrationTests : IDisposable
     //  SETUP HELPERS
     // =====================================================================
 
-    private void SetupChallenge()
+    private void SetupPublicKeyCertificates()
     {
         _server.Given(Request.Create()
-                .WithPath("/online/Session/AuthorizationChallenge")
-                .UsingPost())
+                .WithPath("/v2/security/public-key-certificates")
+                .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(HttpStatusCode.OK)
                 .WithHeader("Content-Type", "application/json")
                 .WithBody(JsonSerializer.Serialize(new
                 {
-                    timestamp = "2025-01-15T10:00:00Z",
-                    challenge = "test-challenge-abc123"
-                })));
-    }
-
-    private void SetupInitToken()
-    {
-        _server.Given(Request.Create()
-                .WithPath("/online/Session/InitToken")
-                .UsingPost())
-            .RespondWith(Response.Create()
-                .WithStatusCode(HttpStatusCode.OK)
-                .WithHeader("Content-Type", "application/json")
-                .WithBody(JsonSerializer.Serialize(new
-                {
-                    timestamp = "2025-01-15T10:00:01Z",
-                    referenceNumber = "ref-12345",
-                    sessionToken = new
+                    certificates = new[]
                     {
-                        token = "mock-session-token-xyz",
-                        generatedAt = "2025-01-15T10:00:01Z",
-                        ttl = 3600
+                        new
+                        {
+                            certificate = _testCertBase64,
+                            validFrom = DateTimeOffset.UtcNow.AddDays(-1).ToString("o"),
+                            validTo = DateTimeOffset.UtcNow.AddYears(1).ToString("o"),
+                            usage = new[] { "KsefTokenEncryption" }
+                        }
                     }
                 })));
     }
 
-    private void SetupInvoiceQuery()
+    private void SetupAuthChallenge()
     {
         _server.Given(Request.Create()
-                .WithPath("/online/Query/InvoiceQuery")
+                .WithPath("/v2/auth/challenge")
                 .UsingPost())
             .RespondWith(Response.Create()
                 .WithStatusCode(HttpStatusCode.OK)
                 .WithHeader("Content-Type", "application/json")
                 .WithBody(JsonSerializer.Serialize(new
                 {
-                    timestamp = "2025-01-15T10:00:02Z",
-                    referenceNumber = "query-ref-999",
-                    processingCode = 100
+                    challenge = "test-challenge-abc123",
+                    timestamp = "2025-01-15T10:00:00Z",
+                    timestampMs = 1736935200000L
                 })));
     }
 
-    private void SetupQueryStatusCompleted(int numberOfParts)
+    private void SetupKsefToken()
     {
         _server.Given(Request.Create()
-                .WithPath("/online/Query/QueryStatus/query-ref-999")
+                .WithPath("/v2/auth/ksef-token")
+                .UsingPost())
+            .RespondWith(Response.Create()
+                .WithStatusCode(HttpStatusCode.OK)
+                .WithHeader("Content-Type", "application/json")
+                .WithBody(JsonSerializer.Serialize(new
+                {
+                    referenceNumber = "auth-ref-12345",
+                    authenticationToken = new
+                    {
+                        token = "mock-auth-token",
+                        validUntil = DateTimeOffset.UtcNow.AddMinutes(5).ToString("o")
+                    }
+                })));
+    }
+
+    private void SetupAuthStatus()
+    {
+        _server.Given(Request.Create()
+                .WithPath("/v2/auth/auth-ref-12345")
                 .UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(HttpStatusCode.OK)
                 .WithHeader("Content-Type", "application/json")
                 .WithBody(JsonSerializer.Serialize(new
                 {
-                    referenceNumber = "query-ref-999",
-                    processingCode = 200,
-                    processingDescription = "Completed",
-                    numberOfParts
+                    status = new { code = 200, description = "OK" }
                 })));
     }
 
-    private void SetupQueryResultPart0()
+    private void SetupTokenRedeem()
     {
         _server.Given(Request.Create()
-                .WithPath("/online/Query/QueryResult/query-ref-999/0")
-                .UsingGet())
+                .WithPath("/v2/auth/token/redeem")
+                .UsingPost())
             .RespondWith(Response.Create()
                 .WithStatusCode(HttpStatusCode.OK)
                 .WithHeader("Content-Type", "application/json")
                 .WithBody(JsonSerializer.Serialize(new
                 {
-                    referenceNumber = "query-ref-999",
-                    partReferenceNumber = "part-0",
-                    invoiceHeaderList = new[]
+                    accessToken = new
+                    {
+                        token = "mock-access-token",
+                        validUntil = DateTimeOffset.UtcNow.AddHours(1).ToString("o")
+                    },
+                    refreshToken = new
+                    {
+                        token = "mock-refresh-token",
+                        validUntil = DateTimeOffset.UtcNow.AddDays(1).ToString("o")
+                    }
+                })));
+    }
+
+    private void SetupInvoiceMetadata()
+    {
+        _server.Given(Request.Create()
+                .WithPath("/v2/invoices/query/metadata")
+                .UsingPost())
+            .RespondWith(Response.Create()
+                .WithStatusCode(HttpStatusCode.OK)
+                .WithHeader("Content-Type", "application/json")
+                .WithBody(JsonSerializer.Serialize(new
+                {
+                    hasMore = false,
+                    isTruncated = false,
+                    invoices = new[]
                     {
                         new
                         {
-                            ksefReferenceNumber = "KSeF-001",
-                            invoiceReferenceNumber = "FV/001/2025",
-                            invoicingDate = "2025-01-10",
-                            acquisitionTimestamp = "2025-01-10T08:00:00Z",
-                            net = 1000m, vat = 230m, gross = 1230m,
+                            ksefNumber = "KSeF-001",
+                            invoiceNumber = "FV/001/2025",
+                            issueDate = "2025-01-10T00:00:00Z",
+                            acquisitionDate = "2025-01-10T08:00:00Z",
+                            netAmount = 1000m,
+                            vatAmount = 230m,
+                            grossAmount = 1230m,
                             currency = "PLN",
-                            subjectBy = new
-                            {
-                                issuedByIdentifier = new { type = "onip", identifier = "1111111111" },
-                                issuedByName = new { type = "fn", fullName = "Firma A Sp. z o.o." }
-                            }
+                            seller = new { nip = "1111111111", name = "Firma A Sp. z o.o." },
+                            buyer  = new { nip = "9876543210", name = "Nabywca S.A." }
                         },
                         new
                         {
-                            ksefReferenceNumber = "KSeF-002",
-                            invoiceReferenceNumber = "FV/002/2025",
-                            invoicingDate = "2025-01-15",
-                            acquisitionTimestamp = "2025-01-15T09:00:00Z",
-                            net = 500m, vat = 115m, gross = 615m,
+                            ksefNumber = "KSeF-002",
+                            invoiceNumber = "FV/002/2025",
+                            issueDate = "2025-01-15T00:00:00Z",
+                            acquisitionDate = "2025-01-15T09:00:00Z",
+                            netAmount = 500m,
+                            vatAmount = 115m,
+                            grossAmount = 615m,
                             currency = "PLN",
-                            subjectBy = new
-                            {
-                                issuedByIdentifier = new { type = "onip", identifier = "2222222222" },
-                                issuedByName = new { type = "fn", fullName = "Firma B S.A." }
-                            }
+                            seller = new { nip = "2222222222", name = "Firma B S.A." },
+                            buyer  = new { nip = "9876543210", name = "Nabywca S.A." }
                         }
                     }
                 })));

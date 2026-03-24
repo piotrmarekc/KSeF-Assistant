@@ -29,9 +29,10 @@ public sealed record InvoiceRecord
     public string BuyerCity { get; init; } = string.Empty;
     public string BuyerPostCode { get; init; } = string.Empty;
 
-    // --- Wartości (per stawka VAT) ---
-    public decimal TotalNetValue { get; init; }       // /Faktura/Fa/P_15
-    public decimal VatAmount23 { get; init; }          // /Faktura/Fa/P_14_1
+    // --- Wartości ---
+    public decimal TotalNetValue { get; init; }        // suma netto
+    public decimal TotalVatValue { get; init; }        // suma VAT (z API lub sumowana z XML)
+    public decimal VatAmount23 { get; init; }          // /Faktura/Fa/P_14_1 (tylko po załadowaniu XML)
     public decimal VatAmount8 { get; init; }           // /Faktura/Fa/P_14_2
     public decimal VatAmount5 { get; init; }           // /Faktura/Fa/P_14_3
     public decimal VatAmount0 { get; init; }           // stawka 0%

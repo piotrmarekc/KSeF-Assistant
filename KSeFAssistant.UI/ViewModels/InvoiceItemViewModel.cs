@@ -8,7 +8,8 @@ namespace KSeFAssistant.UI.ViewModels;
 /// </summary>
 public sealed partial class InvoiceItemViewModel : ObservableObject
 {
-    [ObservableProperty] private bool _isSelected;
+    private bool _isSelected;
+    public bool IsSelected { get => _isSelected; set => SetProperty(ref _isSelected, value); }
 
     public InvoiceRecord Invoice { get; }
 
@@ -20,7 +21,7 @@ public sealed partial class InvoiceItemViewModel : ObservableObject
     public string SellerName => Invoice.SellerName;
     public decimal TotalNetValue => Invoice.TotalNetValue;
     public decimal TotalGrossValue => Invoice.TotalGrossValue;
-    public decimal VatTotal => Invoice.VatAmount23 + Invoice.VatAmount8 + Invoice.VatAmount5 + Invoice.VatAmount0;
+    public decimal VatTotal => Invoice.TotalVatValue;
     public string Currency => Invoice.Currency;
     public string StatusIcon => Invoice.ParseError is not null ? "⚠" : Invoice.XmlLoaded ? "✓" : "·";
 

@@ -18,22 +18,23 @@ public sealed class KSeFDtoMapper
     }
 
     /// <summary>
-    /// Tworzy podstawowy InvoiceRecord z metadanych (bez XML — bez pozycji).
+    /// Tworzy InvoiceRecord z metadanych API v2 (bez XML — bez pozycji i szczegółów adresów).
     /// </summary>
-    public InvoiceRecord MapFromHeader(InvoiceHeaderDto dto)
+    public InvoiceRecord MapFromInvoiceSummary(InvoiceSummaryDto dto)
     {
         return new InvoiceRecord
         {
-            KSeFNumber = dto.KSeFReferenceNumber,
-            InvoiceNumber = dto.InvoiceReferenceNumber,
-            AcquisitionDate = TryParseDateTime(dto.AcquisitionTimestamp),
-            IssueDate = TryParseDateOnly(dto.InvoicingDate),
-            SellerNip = dto.SubjectBy?.Identifier?.Identifier ?? string.Empty,
-            SellerName = dto.SubjectBy?.Name?.FullName ?? dto.SubjectBy?.Name?.TradeName ?? string.Empty,
-            BuyerNip = dto.SubjectTo?.Identifier?.Identifier ?? string.Empty,
-            BuyerName = dto.SubjectTo?.Name?.FullName ?? dto.SubjectTo?.Name?.TradeName ?? string.Empty,
-            TotalNetValue = dto.Net,
-            TotalGrossValue = dto.Gross,
+            KSeFNumber = dto.KsefNumber,
+            InvoiceNumber = dto.InvoiceNumber,
+            AcquisitionDate = dto.AcquisitionDate.UtcDateTime,
+            IssueDate = DateOnly.FromDateTime(dto.IssueDate.Date),
+            SellerNip = dto.Seller?.Nip ?? string.Empty,
+            SellerName = dto.Seller?.Name ?? string.Empty,
+            BuyerNip = dto.Buyer?.Nip ?? string.Empty,
+            BuyerName = dto.Buyer?.Name ?? string.Empty,
+            TotalNetValue = dto.NetAmount,
+            TotalVatValue = dto.VatAmount,
+            TotalGrossValue = dto.GrossAmount,
             Currency = dto.Currency,
             XmlLoaded = false
         };
@@ -85,7 +86,17 @@ public sealed class KSeFDtoMapper
                 VatAmount5     = GetDecimal("//fa:Fa/fa:P_14_3"),
                 VatAmount0     = GetDecimal("//fa:Fa/fa:P_14_4"),
                 VatAmountExempt = GetDecimal("//fa:Fa/fa:P_14_5"),
-                TotalGrossValue = GetDecimal("//fa:Fa/fa:P_15").IfZero(invoice.TotalGrossValue),
+                TotalVatValue  = (GetDecimal("//fa:Fa/fa:P_14_1")
+                    + GetDecimal("//fa:Fa/fa:P_14_2")
+                    + GetDecimal("//fa:Fa/fa:P_14_3")
+                    + GetDecimal("//fa:Fa/fa:P_14_4")
+                    + GetDecimal("//fa:Fa/fa:P_14_5")).IfZero(invoice.TotalVatValue),
+                TotalGrossValue = (GetDecimal("//fa:Fa/fa:P_15")
+                    + GetDecimal("//fa:Fa/fa:P_14_1")
+                    + GetDecimal("//fa:Fa/fa:P_14_2")
+                    + GetDecimal("//fa:Fa/fa:P_14_3")
+                    + GetDecimal("//fa:Fa/fa:P_14_4")
+                    + GetDecimal("//fa:Fa/fa:P_14_5")).IfZero(invoice.TotalGrossValue),
 
                 Currency      = Get("//fa:Fa/fa:KodWaluty").IfEmpty(invoice.Currency),
                 PaymentMethod = Get("//fa:Fa/fa:P_19"),

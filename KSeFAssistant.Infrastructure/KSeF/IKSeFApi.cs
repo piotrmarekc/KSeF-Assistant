@@ -5,99 +5,81 @@ namespace KSeFAssistant.Infrastructure.KSeF;
 
 /// <summary>
 /// Refit interface mapujący endpointy KSeF REST API v2.
-/// Base URL ustawiany dynamicznie przez KSeFApiClient.
-/// Dokumentacja: {baseUrl}/docs/v2
+/// Base URL: https://api.ksef.mf.gov.pl/ — ścieżki zawierają /v2/ prefix.
+/// Dokumentacja: https://api.ksef.mf.gov.pl/docs/v2/index.html
 /// </summary>
-[Headers("Content-Type: application/json", "Accept: application/json")]
+[Headers("Accept: application/json")]
 public interface IKSeFApi
 {
     // =====================================================================
-    //  AUTORYZACJA
+    //  KLUCZ PUBLICZNY
     // =====================================================================
 
-    /// <summary>
-    /// Krok 1: Inicjacja uwierzytelnienia — pobierz challenge value.
-    /// POST /online/Session/AuthorizationChallenge
-    /// </summary>
-    [Post("/online/Session/AuthorizationChallenge")]
-    Task<ApiResponse<AuthorizationChallengeResponse>> GetAuthorizationChallengeAsync(
-        [Body] AuthorizationChallengeRequest request,
+    [Get("/v2/security/public-key-certificates")]
+    Task<ApiResponse<IReadOnlyList<PublicKeyCertificateDto>>> GetPublicKeyCertificatesAsync(
         CancellationToken ct = default);
 
-    /// <summary>
-    /// Krok 2a: Uwierzytelnienie tokenem API.
-    /// POST /online/Session/InitToken
-    /// </summary>
-    [Post("/online/Session/InitToken")]
-    Task<ApiResponse<InitSessionResponse>> InitSessionWithTokenAsync(
-        [Body] InitTokenRequest request,
+    // =====================================================================
+    //  AUTORYZACJA — uzyskanie tokena dostępowego
+    // =====================================================================
+
+    /// POST /v2/auth/challenge — krok 1: pobierz wyzwanie
+    [Post("/v2/auth/challenge")]
+    Task<ApiResponse<AuthChallengeResponse>> GetAuthChallengeAsync(
         CancellationToken ct = default);
 
-    /// <summary>
-    /// Krok 2b: Uwierzytelnienie certyfikatem X.509 (podpisany request).
-    /// POST /online/Session/InitSigned
-    /// </summary>
-    [Post("/online/Session/InitSigned")]
-    Task<ApiResponse<InitSessionResponse>> InitSessionWithCertificateAsync(
-        [Body] string signedXmlRequest,
+    /// POST /v2/auth/ksef-token — krok 2: prześlij zaszyfrowany token
+    [Post("/v2/auth/ksef-token")]
+    Task<ApiResponse<AuthSignatureResponse>> SubmitKsefTokenAsync(
+        [Body] AuthKsefTokenRequest request,
         CancellationToken ct = default);
 
-    /// <summary>
-    /// Zakończenie sesji.
-    /// DELETE /auth/sessions/current
-    /// </summary>
-    [Delete("/auth/sessions/current")]
+    /// GET /v2/auth/{referenceNumber} — krok 3: sprawdź status uwierzytelniania
+    [Get("/v2/auth/{referenceNumber}")]
+    Task<ApiResponse<AuthStatusResponse>> GetAuthStatusAsync(
+        [Header("Authorization")] string authorization,
+        string referenceNumber,
+        CancellationToken ct = default);
+
+    /// POST /v2/auth/token/redeem — krok 4: odbierz accessToken
+    [Post("/v2/auth/token/redeem")]
+    Task<ApiResponse<AuthRedeemResponse>> RedeemTokenAsync(
+        [Header("Authorization")] string authorization,
+        CancellationToken ct = default);
+
+    /// POST /v2/auth/token/refresh — odśwież accessToken refreshTokenem
+    [Post("/v2/auth/token/refresh")]
+    Task<ApiResponse<AuthRedeemResponse>> RefreshTokenAsync(
+        [Header("Authorization")] string authorization,
+        CancellationToken ct = default);
+
+    // =====================================================================
+    //  SESJE
+    // =====================================================================
+
+    /// DELETE /v2/auth/sessions/current — wylogowanie
+    [Delete("/v2/auth/sessions/current")]
     Task<ApiResponse<string>> LogoutAsync(
-        [Header("SessionToken")] string sessionToken,
+        [Header("Authorization")] string authorization,
         CancellationToken ct = default);
 
     // =====================================================================
-    //  FAKTURY — QUERY (ASYNCHRONICZNE)
+    //  FAKTURY
     // =====================================================================
 
-    /// <summary>
-    /// Krok 1: Inicjacja asynchronicznego zapytania o faktury.
-    /// POST /online/Query/InvoiceQuery
-    /// Zwraca referenceNumber do pollingu.
-    /// </summary>
-    [Post("/online/Query/InvoiceQuery")]
-    Task<ApiResponse<InvoiceQueryResponse>> StartInvoiceQueryAsync(
-        [Header("SessionToken")] string sessionToken,
-        [Body] InvoiceQueryRequest request,
+    /// POST /v2/invoices/query/metadata — lista metadanych faktur
+    [Post("/v2/invoices/query/metadata")]
+    Task<ApiResponse<InvoiceMetadataResponse>> QueryInvoiceMetadataAsync(
+        [Header("Authorization")] string authorization,
+        [Body] InvoiceMetadataRequest request,
+        [AliasAs("pageOffset")] int pageOffset,
+        [AliasAs("pageSize")] int pageSize,
         CancellationToken ct = default);
 
-    /// <summary>
-    /// Krok 2: Sprawdź status zapytania (polling co ~2s).
-    /// GET /online/Query/QueryStatus/{referenceNumber}
-    /// </summary>
-    [Get("/online/Query/QueryStatus/{referenceNumber}")]
-    Task<ApiResponse<InvoiceQueryStatusResponse>> GetQueryStatusAsync(
-        [Header("SessionToken")] string sessionToken,
-        string referenceNumber,
-        CancellationToken ct = default);
-
-    /// <summary>
-    /// Krok 3: Pobierz n-tą paczkę wyników (0-indexed).
-    /// GET /online/Query/QueryResult/{referenceNumber}/{partNumber}
-    /// </summary>
-    [Get("/online/Query/QueryResult/{referenceNumber}/{partNumber}")]
-    Task<ApiResponse<InvoiceQueryResultResponse>> GetQueryResultAsync(
-        [Header("SessionToken")] string sessionToken,
-        string referenceNumber,
-        int partNumber,
-        CancellationToken ct = default);
-
-    // =====================================================================
-    //  FAKTURY — POBIERANIE XML
-    // =====================================================================
-
-    /// <summary>
-    /// Pobierz surowy XML FA_v3 faktury.
-    /// GET /invoices/ksef/{ksefReferenceNumber}
-    /// </summary>
-    [Get("/invoices/ksef/{ksefReferenceNumber}")]
+    /// GET /v2/invoices/ksef/{ksefNumber} — pobierz XML faktury
+    [Get("/v2/invoices/ksef/{ksefNumber}")]
     Task<ApiResponse<string>> DownloadInvoiceXmlAsync(
-        [Header("SessionToken")] string sessionToken,
-        string ksefReferenceNumber,
+        [Header("Authorization")] string authorization,
+        string ksefNumber,
         CancellationToken ct = default);
 }

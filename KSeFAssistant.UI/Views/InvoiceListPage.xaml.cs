@@ -11,7 +11,28 @@ public sealed partial class InvoiceListPage : Page
     public InvoiceListPage()
     {
         ViewModel = App.Services.GetRequiredService<InvoiceListViewModel>();
+        this.DataContext = ViewModel;
         this.InitializeComponent();
+        YearCombo.ItemsSource = ViewModel.Years;
+        YearCombo.SelectedIndex = ViewModel.Years.ToList().IndexOf(ViewModel.SelectedYear);
+        MonthCombo.ItemsSource = ViewModel.MonthNames;
+        MonthCombo.SelectedIndex = ViewModel.SelectedMonth - 1;
+
+        // Update invoice count label when collection changes
+        ViewModel.DisplayedInvoices.CollectionChanged += (_, _) =>
+            InvoiceCountBlock.Text = ViewModel.DisplayedInvoices.Count.ToString();
+        InvoiceCountBlock.Text = ViewModel.DisplayedInvoices.Count.ToString();
+    }
+
+    private void YearCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.AddedItems.FirstOrDefault() is int year)
+            ViewModel.SelectedYear = year;
+    }
+
+    private void MonthCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ViewModel.SelectedMonth = MonthCombo.SelectedIndex + 1;
     }
 
     private async void ExportSelected_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
