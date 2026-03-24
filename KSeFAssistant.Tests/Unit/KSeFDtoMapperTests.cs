@@ -24,8 +24,12 @@ public sealed class KSeFDtoMapperTests
             GrossAmount = 1230m,
             VatAmount = 230m,
             Currency = "PLN",
-            Seller = new InvoicePartyDto { Nip = "1234567890", Name = "Firma Testowa Sp. z o.o." },
-            Buyer  = new InvoicePartyDto { Nip = "9876543210", Name = "Nabywca S.A." }
+            Seller = new InvoiceMetadataSellerDto { Nip = "1234567890", Name = "Firma Testowa Sp. z o.o." },
+            Buyer  = new InvoiceMetadataBuyerDto
+            {
+                Identifier = new InvoiceBuyerIdentifierDto { Type = "Nip", Value = "9876543210" },
+                Name = "Nabywca S.A."
+            }
         };
 
         var result = _sut.MapFromInvoiceSummary(dto);
