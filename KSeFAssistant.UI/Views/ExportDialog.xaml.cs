@@ -11,12 +11,11 @@ public sealed partial class ExportDialog : ContentDialog
     public ExportViewModel ViewModel { get; }
     private readonly IReadOnlyList<InvoiceRecord> _invoices;
 
-    public ExportDialog(IReadOnlyList<InvoiceRecord> invoices, SessionContext? session = null)
+    public ExportDialog(IReadOnlyList<InvoiceRecord> invoices)
     {
         _invoices = invoices;
         ViewModel = App.Services.GetRequiredService<ExportViewModel>();
         ViewModel.DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-        ViewModel.Session = session;
         this.DataContext = ViewModel;
         this.InitializeComponent();
 

@@ -10,11 +10,7 @@ public sealed partial class ExportViewModel : ObservableObject
 {
     private readonly IPdfExportService _pdfService;
     private readonly IExcelReportService _excelService;
-    private readonly IKSeFService _ksefService;
     private readonly ILogger<ExportViewModel> _logger;
-
-    /// <summary>Aktywna sesja KSeF — wymagana do pobierania XML przed generowaniem PDF.</summary>
-    public SessionContext? Session { get; set; }
 
     private string _pdfOutputFolder = string.Empty;
     public string PdfOutputFolder { get => _pdfOutputFolder; set => SetProperty(ref _pdfOutputFolder, value); }
@@ -44,21 +40,16 @@ public sealed partial class ExportViewModel : ObservableObject
     public ExportResult? LastResult { get => _lastResult; set => SetProperty(ref _lastResult, value); }
 
     public ExportViewModel(IPdfExportService pdfService, IExcelReportService excelService,
-        IKSeFService ksefService, ILogger<ExportViewModel> logger)
+        ILogger<ExportViewModel> logger)
     {
         _pdfService = pdfService;
         _excelService = excelService;
-        _ksefService = ksefService;
         _logger = logger;
 
-        // Domyślny folder PDF: Pulpit
         PdfOutputFolder = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         ExcelOutputPath = Path.Combine(PdfOutputFolder, $"KSeF_raport_{DateTime.Today:yyyy-MM}.xlsx");
     }
 
-    /// <summary>
-    /// Called from code-behind to start export without going through the ICommand interface.
-    /// </summary>
     public async Task StartExportAsync(IReadOnlyList<InvoiceRecord> invoices)
     {
         var parameters = new ExportParameters { Invoices = invoices };
@@ -80,20 +71,12 @@ public sealed partial class ExportViewModel : ObservableObject
 
         try
         {
-            // Generuj PDF równolegle (max 4 wątki)
             var semaphore = new SemaphoreSlim(4);
             var tasks = parameters.Invoices.Select(async invoice =>
             {
                 await semaphore.WaitAsync(ct);
                 try
                 {
-                    // Załaduj pełny XML (pozycje, adresy) jeśli jeszcze nie załadowany
-                    if (!invoice.XmlLoaded && Session is not null)
-                    {
-                        try { invoice = await _ksefService.LoadInvoiceXmlAsync(Session, invoice, ct); }
-                        catch (Exception ex) { _logger.LogWarning(ex, "Nie udało się pobrać XML dla {KSeFNumber}", invoice.KSeFNumber); }
-                    }
-
                     var bytes = await _pdfService.GeneratePdfAsync(invoice, ct);
                     var fileName = _pdfService.GetFileName(invoice);
                     var filePath = Path.Combine(PdfOutputFolder, fileName);
@@ -119,7 +102,6 @@ public sealed partial class ExportViewModel : ObservableObject
 
             await Task.WhenAll(tasks);
 
-            // Excel
             string? excelPath = null;
             if (GenerateExcel && parameters.Invoices.Count > 0)
             {
@@ -163,7 +145,6 @@ public sealed partial class ExportViewModel : ObservableObject
     private bool CanExport(ExportParameters? p) =>
         !IsBusy && !string.IsNullOrEmpty(PdfOutputFolder) && p?.Invoices.Count > 0;
 
-    // Referencja do DispatcherQueue (ustawiana przez View)
     public Microsoft.UI.Dispatching.DispatcherQueue? DispatcherQueue { get; set; }
 }
 

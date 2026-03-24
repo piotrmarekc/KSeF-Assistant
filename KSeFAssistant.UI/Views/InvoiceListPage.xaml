@@ -89,6 +89,12 @@
                 <AppBarButton Icon="Download" Label="Eksportuj zaznaczone"
                               Click="ExportSelected_Click"
                               IsEnabled="{Binding SelectedCount, Converter={StaticResource IntToBool}}"/>
+                <AppBarButton Icon="SaveLocal" Label="Pobierz PDF z KSeF"
+                              Click="DownloadPdfFromKSeF_Click"
+                              IsEnabled="{Binding SelectedCount, Converter={StaticResource IntToBool}}"/>
+                <AppBarButton Icon="Stop" Label="Anuluj pobieranie"
+                              Click="CancelPdfDownload_Click"
+                              Visibility="{Binding IsPdfDownloading, Converter={StaticResource BoolToVisibility}}"/>
             </CommandBar>
 
             <!-- Pasek postępu -->

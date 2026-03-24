@@ -5,6 +5,7 @@ using KSeFAssistant.Core.Models;
 using KSeFAssistant.Core.Services;
 using Microsoft.Extensions.Logging;
 using System.Collections.ObjectModel;
+using System.Threading;
 
 namespace KSeFAssistant.UI.ViewModels;
 
@@ -13,6 +14,7 @@ public sealed partial class InvoiceListViewModel : ObservableObject
     private readonly IKSeFService _ksefService;
     private readonly ICredentialManager _credentials;
     private readonly InvoiceFilterService _filterService;
+    private readonly IPdfExportService _pdfService;
     private readonly ILogger<InvoiceListViewModel> _logger;
 
     private SessionContext? _activeSession;
@@ -60,11 +62,13 @@ public sealed partial class InvoiceListViewModel : ObservableObject
     private CancellationTokenSource? _cts;
 
     public InvoiceListViewModel(IKSeFService ksefService, ICredentialManager credentials,
-        InvoiceFilterService filterService, ILogger<InvoiceListViewModel> logger)
+        InvoiceFilterService filterService, IPdfExportService pdfService,
+        ILogger<InvoiceListViewModel> logger)
     {
         _ksefService = ksefService;
         _credentials = credentials;
         _filterService = filterService;
+        _pdfService = pdfService;
         _logger = logger;
     }
 
@@ -174,6 +178,88 @@ public sealed partial class InvoiceListViewModel : ObservableObject
         foreach (var inv in DisplayedInvoices)
             inv.IsSelected = false;
     }
+
+    // --- Pobieranie PDF z KSeF ---
+    private bool _isPdfDownloading;
+    public bool IsPdfDownloading { get => _isPdfDownloading; set => SetProperty(ref _isPdfDownloading, value); }
+
+    private int _pdfDownloadProgress;
+    public int PdfDownloadProgress { get => _pdfDownloadProgress; set => SetProperty(ref _pdfDownloadProgress, value); }
+
+    private int _pdfDownloadTotal;
+    public int PdfDownloadTotal { get => _pdfDownloadTotal; set => SetProperty(ref _pdfDownloadTotal, value); }
+
+    /// <summary>
+    /// Pobiera XML z KSeF dla każdej faktury, generuje PDF i zapisuje do <paramref name="outputFolder"/>.
+    /// Wywoływana z code-behind po wyborze folderu przez użytkownika.
+    /// </summary>
+    public async Task DownloadPdfsFromKSeFAsync(
+        IReadOnlyList<InvoiceRecord> invoices, string outputFolder, CancellationToken ct = default)
+    {
+        if (_activeSession is null || invoices.Count == 0) return;
+
+        IsPdfDownloading = true;
+        IsBusy = true;
+        PdfDownloadProgress = 0;
+        PdfDownloadTotal = invoices.Count;
+        StatusMessage = $"Pobieranie {invoices.Count} faktur z KSeF...";
+
+        int success = 0;
+        var errors = new List<string>();
+
+        try
+        {
+            var semaphore = new SemaphoreSlim(3);
+            var tasks = invoices.Select(async invoice =>
+            {
+                await semaphore.WaitAsync(ct);
+                try
+                {
+                    var enriched = await _ksefService.LoadInvoiceXmlAsync(_activeSession, invoice, ct);
+                    var bytes = await _pdfService.GeneratePdfAsync(enriched, ct);
+                    var filePath = Path.Combine(outputFolder, _pdfService.GetFileName(enriched));
+                    await File.WriteAllBytesAsync(filePath, bytes, ct);
+                    Interlocked.Increment(ref success);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Błąd PDF dla {KSeFNumber}", invoice.KSeFNumber);
+                    lock (errors) errors.Add($"{invoice.InvoiceNumber}: {ex.Message}");
+                }
+                finally
+                {
+                    semaphore.Release();
+                    DispatcherQueue?.TryEnqueue(() =>
+                    {
+                        PdfDownloadProgress++;
+                        StatusMessage = $"Pobrano {PdfDownloadProgress}/{PdfDownloadTotal} faktur...";
+                    });
+                }
+            });
+
+            await Task.WhenAll(tasks);
+
+            StatusMessage = errors.Count == 0
+                ? $"Pobrano {success} plików PDF do: {outputFolder}"
+                : $"Pobrano {success} PDF, błędy: {errors.Count}. Szczegóły w logach.";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Pobieranie przerwane.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Krytyczny błąd pobierania PDF");
+            StatusMessage = $"Błąd: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            IsPdfDownloading = false;
+        }
+    }
+
+    public Microsoft.UI.Dispatching.DispatcherQueue? DispatcherQueue { get; set; }
 
     public IReadOnlyList<InvoiceRecord> GetSelectedInvoices() =>
         DisplayedInvoices
